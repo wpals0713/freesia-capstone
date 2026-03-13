@@ -1,0 +1,24 @@
+# --- 최상위 환경 변수 및 에디터 설정 ---
+.env
+.DS_Store
+.idea/
+.vscode/
+
+# --- 1. React (Frontend) ---
+frontend/node_modules/
+frontend/dist/
+frontend/.env*
+!frontend/.env.example
+
+# --- 2. Spring Boot (Backend) ---
+backend/build/
+backend/out/
+backend/.gradle/
+backend/src/main/resources/application-secret.yml
+
+# --- 3. Python (AI Server) ---
+ai-server/venv/
+ai-server/__pycache__/
+ai-server/*.pyc
+ai-server/.env
+!ai-server/.env.example

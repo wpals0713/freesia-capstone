@@ -1,0 +1,23 @@
+# ── 웹 서버 ──────────────────────────────────────────
+flask==3.1.0
+flask-cors==5.0.1
+
+# ── 환경 변수 ─────────────────────────────────────────
+python-dotenv==1.0.1
+
+# ── NLP / 감정 분석 ───────────────────────────────────
+transformers==4.47.1        # Hugging Face 모델 (KoBERT, KoELECTRA 등)
+torch==2.5.1                # PyTorch (transformers 의존성)
+sentencepiece==0.2.0        # 한국어 토크나이저
+accelerate>=0.26.0          # pipeline 모델 로딩 최적화
+
+# ── LangChain / RAG ───────────────────────────────────
+langchain==0.3.14
+langchain-community==0.3.14
+langchain-openai==0.2.14    # OpenAI / LLM 연동
+
+# ── 벡터 DB ───────────────────────────────────────────
+chromadb==0.6.3
+
+# ── HTTP 통신 ─────────────────────────────────────────
+requests==2.32.3
