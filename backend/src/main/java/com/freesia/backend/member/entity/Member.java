@@ -36,6 +36,9 @@ public class Member {
     @Column(nullable = false, length = 20)
     private MemberStatus status;
 
+    @Column(nullable = false)
+    private int loginFailCount = 0;
+
     @CreatedDate
     @Column(updatable = false)
     private LocalDateTime createdAt;

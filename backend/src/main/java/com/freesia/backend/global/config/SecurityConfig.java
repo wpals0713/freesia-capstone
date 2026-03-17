@@ -41,10 +41,9 @@ public class SecurityConfig {
             .sessionManagement(session ->
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // 회원가입 / 로그인은 인증 없이 허용
-                .requestMatchers("/api/members/join", "/api/members/login", "/api/auth/**").permitAll()
-                // 나머지는 인증 필요
-                .anyRequest().authenticated()
+                // 개발 편의상 모든 API 경로 인증 없이 허용
+                .requestMatchers("/api/**").permitAll()
+                .anyRequest().permitAll()
             )
             // JWT 인증 필터를 UsernamePasswordAuthenticationFilter 앞에 등록
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
