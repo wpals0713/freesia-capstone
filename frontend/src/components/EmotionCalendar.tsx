@@ -6,17 +6,23 @@ import {
   format,
   addMonths,
   subMonths,
+  isSameDay,
 } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import type { DiaryResponse } from '../api/diary';
 
-const EMOTION_EMOJI: Record<string, string> = {
-  기쁨: '😊',
-  슬픔: '😢',
-  분노: '😡',
-  불안: '😰',
-  중립: '😐',
+// 감정 타입 정의
+type EmotionType = '기쁨' | '슬픔' | '분노' | '불안' | '중립';
+
+const EMOTION_CONFIG: Record<EmotionType, { emoji: string; color: string; bgColor: string; hoverBgColor: string }> = {
+  기쁨: { emoji: '😊', color: 'text-yellow-600', bgColor: 'bg-yellow-100', hoverBgColor: 'hover:bg-yellow-200' },
+  슬픔: { emoji: '😢', color: 'text-blue-600', bgColor: 'bg-blue-100', hoverBgColor: 'hover:bg-blue-200' },
+  분노: { emoji: '😡', color: 'text-red-600', bgColor: 'bg-red-100', hoverBgColor: 'hover:bg-red-200' },
+  불안: { emoji: '😰', color: 'text-violet-600', bgColor: 'bg-violet-100', hoverBgColor: 'hover:bg-violet-200' },
+  중립: { emoji: '😐', color: 'text-gray-600', bgColor: 'bg-gray-100', hoverBgColor: 'hover:bg-gray-200' },
 };
+
+const EMOTION_BUTTONS: EmotionType[] = ['기쁨', '슬픔', '분노', '불안', '중립'];
 
 const DOW_NAMES = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -26,13 +32,15 @@ interface Props {
 
 export default function EmotionCalendar({ diaries }: Props) {
   const [viewDate, setViewDate] = useState(() => new Date());
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [showEmotionModal, setShowEmotionModal] = useState(false);
   const today = new Date();
 
-  const year  = viewDate.getFullYear();
+  const year = viewDate.getFullYear();
   const month = viewDate.getMonth(); // 0-indexed
 
-  // 해당 월의 1일 요일(0=일, 6=토)
-  const startDow    = getDay(startOfMonth(viewDate));
+  // 해당 월의 1 일 요일 (0=일, 6=토)
+  const startDow = getDay(startOfMonth(viewDate));
   const daysInMonth = getDaysInMonth(viewDate);
 
   // 일기 맵: "YYYY-MM-DD" → emotion
@@ -50,27 +58,51 @@ export default function EmotionCalendar({ diaries }: Props) {
   ];
   while (cells.length % 7 !== 0) cells.push(null);
 
-  const monthLabel = format(viewDate, 'yyyy년 M월', { locale: ko });
+  const monthLabel = format(viewDate, 'yyyy 년 M 월', { locale: ko });
+
+  const handleDateClick = (day: number) => {
+    const mm = String(month + 1).padStart(2, '0');
+    const dd = String(day).padStart(2, '0');
+    const dateStr = `${year}-${mm}-${dd}`;
+    setSelectedDate(dateStr);
+    setShowEmotionModal(true);
+  };
+
+  const handleEmotionSelect = (emotion: EmotionType) => {
+    if (selectedDate) {
+      console.log(`선택된 날짜: ${selectedDate}, 감정: ${emotion}`);
+      // TODO: 백엔드 API 로 감정 전송
+      setShowEmotionModal(false);
+      setSelectedDate(null);
+    }
+  };
+
+  const closeEmotionModal = () => {
+    setShowEmotionModal(false);
+    setSelectedDate(null);
+  };
 
   return (
-    <section className="bg-white rounded-2xl shadow-sm border border-purple-100 p-6">
+    <section className="bg-white rounded-3xl shadow-lg border-2 border-yellow-100 p-8">
       {/* 헤더 */}
-      <div className="flex items-center gap-2 mb-5">
-        <span className="text-lg">📅</span>
-        <h2 className="text-base font-semibold text-gray-700">감정 달력</h2>
-        <div className="ml-auto flex items-center gap-1.5">
+      <div className="flex items-center gap-3 mb-8">
+        <span className="text-2xl">📅</span>
+        <h2 className="text-2xl font-bold text-gray-800">감정 달력</h2>
+        <div className="ml-auto flex items-center gap-2">
           <button
             onClick={() => setViewDate((d) => subMonths(d, 1))}
-            className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:bg-purple-50 hover:text-indigo-600 transition-colors text-base leading-none"
+            className="w-10 h-10 flex items-center justify-center rounded-full text-gray-500 hover:bg-yellow-100 hover:text-yellow-600 transition-all duration-200 text-lg font-bold shadow-sm hover:shadow-md"
+            aria-label="이전 달"
           >
             ‹
           </button>
-          <span className="text-sm text-gray-500 w-[7rem] text-center font-medium">
+          <span className="text-lg font-semibold text-gray-700 w-[8rem] text-center">
             {monthLabel}
           </span>
           <button
             onClick={() => setViewDate((d) => addMonths(d, 1))}
-            className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:bg-purple-50 hover:text-indigo-600 transition-colors text-base leading-none"
+            className="w-10 h-10 flex items-center justify-center rounded-full text-gray-500 hover:bg-yellow-100 hover:text-yellow-600 transition-all duration-200 text-lg font-bold shadow-sm hover:shadow-md"
+            aria-label="다음 달"
           >
             ›
           </button>
@@ -78,12 +110,12 @@ export default function EmotionCalendar({ diaries }: Props) {
       </div>
 
       {/* 요일 헤더 */}
-      <div className="grid grid-cols-7 mb-2">
+      <div className="grid grid-cols-7 mb-4">
         {DOW_NAMES.map((name, i) => (
           <div
             key={name}
-            className={`text-center text-xs font-semibold py-1 ${
-              i === 0 ? 'text-rose-400' : i === 6 ? 'text-indigo-400' : 'text-gray-400'
+            className={`text-center text-sm font-bold py-2 ${
+              i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-gray-500'
             }`}
           >
             {name}
@@ -92,69 +124,163 @@ export default function EmotionCalendar({ diaries }: Props) {
       </div>
 
       {/* 날짜 격자 */}
-      <div className="grid grid-cols-7 gap-y-1">
+      <div className="grid grid-cols-7 gap-2">
         {cells.map((day, idx) => {
           if (day === null) {
-            return <div key={`empty-${idx}`} className="h-12" />;
+            return <div key={`empty-${idx}`} className="aspect-square" />;
           }
 
-          const mm      = String(month + 1).padStart(2, '0');
-          const dd      = String(day).padStart(2, '0');
+          const mm = String(month + 1).padStart(2, '0');
+          const dd = String(day).padStart(2, '0');
           const dateStr = `${year}-${mm}-${dd}`;
 
-          const isToday =
-            today.getFullYear() === year &&
-            today.getMonth()    === month &&
-            today.getDate()     === day;
-
-          const emotion = diaryMap[dateStr];
-          const emoji   = emotion ? (EMOTION_EMOJI[emotion] ?? '🙂') : null;
-          const dow     = idx % 7; // 0=일, 6=토
+          const isToday = isSameDay(viewDate, new Date(year, month, day));
+          const emotion = diaryMap[dateStr] as EmotionType | undefined;
+          const config = emotion ? EMOTION_CONFIG[emotion] : null;
+          const dow = idx % 7; // 0=일, 6=토
 
           return (
-            <div
+            <button
               key={dateStr}
-              className={`h-12 flex flex-col items-center justify-center rounded-xl transition-colors ${
-                isToday
-                  ? 'bg-indigo-100 ring-2 ring-indigo-300'
-                  : emoji
-                  ? 'bg-rose-50 hover:bg-rose-100'
-                  : 'hover:bg-gray-50'
-              }`}
+              onClick={() => handleDateClick(day)}
+              className={`
+                aspect-square rounded-2xl flex flex-col items-center justify-center
+                transition-all duration-300 transform
+                ${
+                  isToday
+                    ? 'bg-gradient-to-br from-yellow-400 to-yellow-500 text-white shadow-lg scale-105'
+                    : config
+                    ? `${config.bgColor} ${config.color} hover:scale-105`
+                    : 'bg-gray-50 hover:bg-yellow-50 hover:scale-105'
+                }
+                ${!isToday && !config ? 'text-gray-600' : ''}
+              `}
             >
               {/* 날짜 숫자 */}
               <span
-                className={`text-xs leading-none ${
-                  isToday
-                    ? 'font-extrabold text-indigo-700'
-                    : dow === 0
-                    ? 'font-medium text-rose-400'
-                    : dow === 6
-                    ? 'font-medium text-indigo-500'
-                    : 'text-gray-600'
-                }`}
+                className={`
+                  text-lg leading-none font-bold
+                  ${isToday ? 'text-white' : dow === 0 ? 'text-red-400' : dow === 6 ? 'text-blue-400' : 'text-gray-700'}
+                `}
               >
                 {day}
               </span>
 
               {/* 감정 이모지 도장 */}
-              <span className={`text-base leading-none mt-0.5 ${emoji ? '' : 'invisible'}`}>
-                {emoji ?? '·'}
-              </span>
-            </div>
+              {config && (
+                <span className="text-xl leading-none mt-1 animate-bounce-short">
+                  {config.emoji}
+                </span>
+              )}
+
+              {/* 오늘 표시 */}
+              {isToday && (
+                <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-400 rounded-full animate-pulse" />
+              )}
+            </button>
           );
         })}
       </div>
 
       {/* 범례 */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-4 pt-3 border-t border-gray-100 justify-center">
-        {Object.entries(EMOTION_EMOJI).map(([label, emo]) => (
-          <span key={label} className="flex items-center gap-1 text-xs text-gray-400">
-            <span>{emo}</span>
+      <div className="flex flex-wrap items-center justify-center gap-3 mt-6 pt-4 border-t-2 border-yellow-100">
+        <span className="text-sm font-semibold text-gray-500">감정 범례:</span>
+        {Object.entries(EMOTION_CONFIG).map(([label, config]) => (
+          <span
+            key={label}
+            className={`
+              flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium
+              ${config.bgColor} ${config.color} transition-all duration-200 hover:scale-110
+            `}
+          >
+            <span>{config.emoji}</span>
             {label}
           </span>
         ))}
       </div>
+
+      {/* 감정 선택 모달 */}
+      {showEmotionModal && selectedDate && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-fade-in">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full mx-4 shadow-2xl animate-scale-in">
+            {/* 모달 헤더 */}
+            <div className="text-center mb-6">
+              <h3 className="text-xl font-bold text-gray-800 mb-2">
+                📅 {selectedDate}의 감정
+              </h3>
+              <p className="text-sm text-gray-500">
+                {new Date(selectedDate).toLocaleDateString('ko-KR', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                  weekday: 'long',
+                })}
+              </p>
+            </div>
+
+            {/* 감정 버튼 그리드 */}
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              {EMOTION_BUTTONS.map((emotion) => {
+                const config = EMOTION_CONFIG[emotion];
+                const currentEmotion = diaryMap[selectedDate] as EmotionType | undefined;
+                const isSelected = currentEmotion === emotion;
+
+                return (
+                  <button
+                    key={emotion}
+                    onClick={() => handleEmotionSelect(emotion)}
+                    className={`
+                      flex flex-col items-center gap-2 p-4 rounded-2xl
+                      transition-all duration-300 transform hover:scale-105
+                      ${
+                        isSelected
+                          ? `${config.bgColor} ${config.color} ring-2 ring-yellow-400 shadow-lg`
+                          : 'bg-gray-50 hover:bg-yellow-50 text-gray-600'
+                      }
+                    `}
+                  >
+                    <span className="text-3xl">{config.emoji}</span>
+                    <span className="text-sm font-semibold">{emotion}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* 닫기 버튼 */}
+            <button
+              onClick={closeEmotionModal}
+              className="w-full py-3 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold transition-colors duration-200"
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 애니메이션 스타일 */}
+      <style>{`
+        @keyframes bounce-short {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-3px); }
+        }
+        .animate-bounce-short {
+          animation: bounce-short 0.5s ease-in-out;
+        }
+        @keyframes fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .animate-fade-in {
+          animation: fade-in 0.2s ease-out;
+        }
+        @keyframes scale-in {
+          from { transform: scale(0.9); opacity: 0; }
+          to { transform: scale(1); opacity: 1; }
+        }
+        .animate-scale-in {
+          animation: scale-in 0.3s ease-out;
+        }
+      `}</style>
     </section>
   );
 }

@@ -5,6 +5,7 @@ import { createDiary, getMyDiaries, updateDiary, deleteDiary } from '../api/diar
 import type { DiaryResponse } from '../api/diary';
 import DiaryStatsDashboard from '../components/DiaryStatsDashboard';
 import EmotionCalendar from '../components/EmotionCalendar';
+import Sidebar from '../components/Sidebar';
 
 const EMOTION_EMOJI: Record<string, string> = {
   기쁨: '😊',
@@ -245,138 +246,143 @@ export default function HomePage() {
       });
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-rose-50 via-purple-50 to-indigo-50">
-      {toast && (
-        <AnalysisToast
-          emotion={toast.emotion}
-          score={toast.score}
-          onClose={() => setToast(null)}
-        />
-      )}
-
-      {/* 헤더 */}
-      <header className="bg-white/70 backdrop-blur border-b border-purple-100 sticky top-0 z-40">
-        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
-          <h1 className="text-xl font-bold text-indigo-700">🌸 Freesia</h1>
-          <div className="flex items-center gap-3">
-            {user && (
-              <span className="text-sm text-gray-500">{user.nickname}님</span>
-            )}
-            <button
-              onClick={handleLogout}
-              className="text-sm px-3 py-1.5 border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50 transition-colors"
-            >
-              로그아웃
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-2xl mx-auto px-4 py-8 space-y-8">
-        {/* 감정 통계 대시보드 */}
-        <DiaryStatsDashboard refreshKey={statsKey} />
-
-        {/* 감정 달력 */}
-        <EmotionCalendar diaries={diaries} />
-
-        {/* 일기 작성 / 수정 폼 */}
-        <section
-          ref={formRef}
-          className={`bg-white rounded-2xl shadow-sm border p-6 transition-colors ${
-            editingDiary ? 'border-indigo-300' : 'border-purple-100'
-          }`}
-        >
-          <div className="flex items-center gap-2 mb-4">
-            <span className="text-lg">{editingDiary ? '✏️' : '📝'}</span>
-            <h2 className="text-base font-semibold text-gray-700">
-              {editingDiary ? '일기 수정' : '오늘의 일기'}
-            </h2>
-            <span className="ml-auto text-xs text-gray-400">{formDateLabel}</span>
-          </div>
-
-          {/* 수정 모드 안내 배너 */}
-          {editingDiary && (
-            <div className="flex items-center justify-between mb-3 px-3 py-2 bg-indigo-50 rounded-xl text-xs text-indigo-600">
-              <span>✏️ 수정 모드 — 내용을 고치고 수정하기를 눌러주세요.</span>
-              <button
-                onClick={handleCancelEdit}
-                className="ml-2 text-indigo-400 hover:text-indigo-600 font-medium"
-              >
-                취소
-              </button>
-            </div>
+    <div className="flex bg-gray-50 min-h-screen">
+      <Sidebar />
+      <div className="flex-1 ml-64 p-10">
+        <div className="min-h-screen bg-gradient-to-br from-rose-50 via-purple-50 to-indigo-50">
+          {toast && (
+            <AnalysisToast
+              emotion={toast.emotion}
+              score={toast.score}
+              onClose={() => setToast(null)}
+            />
           )}
 
-          <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="오늘 하루는 어땠나요? 자유롭게 적어보세요..."
-            rows={5}
-            className={`w-full resize-none rounded-xl border px-4 py-3 text-sm text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:border-transparent leading-relaxed ${
-              editingDiary
-                ? 'border-indigo-200 bg-indigo-50/30 focus:ring-indigo-300'
-                : 'border-gray-200 bg-rose-50/40 focus:ring-indigo-300'
-            }`}
-          />
-
-          <div className="flex items-center justify-between mt-3">
-            <span className="text-xs text-gray-300">{content.length}자</span>
-            <div className="flex items-center gap-2">
-              {editingDiary && (
+          {/* 헤더 */}
+          <header className="bg-white/70 backdrop-blur border-b border-purple-100 sticky top-0 z-40">
+            <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+              <h1 className="text-xl font-bold text-indigo-700">🌸 Freesia</h1>
+              <div className="flex items-center gap-3">
+                {user && (
+                  <span className="text-sm text-gray-500">{user.nickname}님</span>
+                )}
                 <button
-                  onClick={handleCancelEdit}
-                  className="px-4 py-2 border border-gray-200 text-gray-500 text-sm font-medium rounded-xl hover:bg-gray-50 transition-colors"
+                  onClick={handleLogout}
+                  className="text-sm px-3 py-1.5 border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50 transition-colors"
                 >
-                  취소
+                  로그아웃
                 </button>
+              </div>
+            </div>
+          </header>
+
+          <main className="max-w-2xl mx-auto px-4 py-8 space-y-8">
+            {/* 감정 통계 대시보드 */}
+            <DiaryStatsDashboard refreshKey={statsKey} />
+
+            {/* 감정 달력 */}
+            <EmotionCalendar diaries={diaries} />
+
+            {/* 일기 작성 / 수정 폼 */}
+            <section
+              ref={formRef}
+              className={`bg-white rounded-2xl shadow-sm border p-6 transition-colors ${
+                editingDiary ? 'border-indigo-300' : 'border-purple-100'
+              }`}
+            >
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-lg">{editingDiary ? '✏️' : '📝'}</span>
+                <h2 className="text-base font-semibold text-gray-700">
+                  {editingDiary ? '일기 수정' : '오늘의 일기'}
+                </h2>
+                <span className="ml-auto text-xs text-gray-400">{formDateLabel}</span>
+              </div>
+
+              {/* 수정 모드 안내 배너 */}
+              {editingDiary && (
+                <div className="flex items-center justify-between mb-3 px-3 py-2 bg-indigo-50 rounded-xl text-xs text-indigo-600">
+                  <span>✏️ 수정 모드 — 내용을 고치고 수정하기를 눌러주세요.</span>
+                  <button
+                    onClick={handleCancelEdit}
+                    className="ml-2 text-indigo-400 hover:text-indigo-600 font-medium"
+                  >
+                    취소
+                  </button>
+                </div>
               )}
-              <button
-                onClick={handleSubmit}
-                disabled={saving || !content.trim()}
-                className={`px-5 py-2 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50 ${
+
+              <textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder="오늘 하루는 어땠나요? 자유롭게 적어보세요..."
+                rows={5}
+                className={`w-full resize-none rounded-xl border px-4 py-3 text-sm text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:border-transparent leading-relaxed ${
                   editingDiary
-                    ? 'bg-indigo-500 hover:bg-indigo-600 disabled:bg-indigo-200'
-                    : 'bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-200'
+                    ? 'border-indigo-200 bg-indigo-50/30 focus:ring-indigo-300'
+                    : 'border-gray-200 bg-rose-50/40 focus:ring-indigo-300'
                 }`}
-              >
-                {saving
-                  ? editingDiary ? '수정 중...' : '분석 중...'
-                  : editingDiary ? '수정하기' : '저장하기'}
-              </button>
-            </div>
-          </div>
-        </section>
+              />
 
-        {/* 일기 목록 */}
-        <section>
-          <h2 className="text-base font-semibold text-gray-600 mb-4 flex items-center gap-2">
-            <span>📖</span> 나의 일기 목록
-            <span className="text-xs font-normal text-gray-400">({diaries.length}개)</span>
-          </h2>
+              <div className="flex items-center justify-between mt-3">
+                <span className="text-xs text-gray-300">{content.length}자</span>
+                <div className="flex items-center gap-2">
+                  {editingDiary && (
+                    <button
+                      onClick={handleCancelEdit}
+                      className="px-4 py-2 border border-gray-200 text-gray-500 text-sm font-medium rounded-xl hover:bg-gray-50 transition-colors"
+                    >
+                      취소
+                    </button>
+                  )}
+                  <button
+                    onClick={handleSubmit}
+                    disabled={saving || !content.trim()}
+                    className={`px-5 py-2 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50 ${
+                      editingDiary
+                        ? 'bg-indigo-500 hover:bg-indigo-600 disabled:bg-indigo-200'
+                        : 'bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-200'
+                    }`}
+                  >
+                    {saving
+                      ? editingDiary ? '수정 중...' : '분석 중...'
+                      : editingDiary ? '수정하기' : '저장하기'}
+                  </button>
+                </div>
+              </div>
+            </section>
 
-          {loadingList ? (
-            <div className="text-center text-gray-300 py-12 text-sm">불러오는 중...</div>
-          ) : diaries.length === 0 ? (
-            <div className="text-center text-gray-300 py-16">
-              <p className="text-4xl mb-3">🌱</p>
-              <p className="text-sm">아직 작성된 일기가 없어요.</p>
-              <p className="text-sm">오늘의 이야기를 기록해 보세요!</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {diaries.map((diary) => (
-                <DiaryCard
-                  key={diary.id}
-                  diary={diary}
-                  isEditing={editingDiary?.id === diary.id}
-                  onEdit={handleEdit}
-                  onDelete={handleDelete}
-                />
-              ))}
-            </div>
-          )}
-        </section>
-      </main>
+            {/* 일기 목록 */}
+            <section>
+              <h2 className="text-base font-semibold text-gray-600 mb-4 flex items-center gap-2">
+                <span>📖</span> 나의 일기 목록
+                <span className="text-xs font-normal text-gray-400">({diaries.length}개)</span>
+              </h2>
+
+              {loadingList ? (
+                <div className="text-center text-gray-300 py-12 text-sm">불러오는 중...</div>
+              ) : diaries.length === 0 ? (
+                <div className="text-center text-gray-300 py-16">
+                  <p className="text-4xl mb-3">🌱</p>
+                  <p className="text-sm">아직 작성된 일기가 없어요.</p>
+                  <p className="text-sm">오늘의 이야기를 기록해 보세요!</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {diaries.map((diary) => (
+                    <DiaryCard
+                      key={diary.id}
+                      diary={diary}
+                      isEditing={editingDiary?.id === diary.id}
+                      onEdit={handleEdit}
+                      onDelete={handleDelete}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          </main>
+        </div>
+      </div>
     </div>
   );
 }
