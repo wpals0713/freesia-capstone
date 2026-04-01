@@ -4,6 +4,7 @@ import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import Profile from './pages/Profile';
 import EmotionCalendar from './components/EmotionCalendar';
+import DiaryWritePage from './pages/DiaryWritePage';
 import useAuthStore from './store/authStore';
 
 function PrivateRoute({ children }: { children: ReactNode }) {
@@ -21,6 +22,14 @@ function App() {
           element={
             <PrivateRoute>
               <HomePage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/write"
+          element={
+            <PrivateRoute>
+              <DiaryWritePage />
             </PrivateRoute>
           }
         />

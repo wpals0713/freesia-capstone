@@ -6,7 +6,7 @@ const location = useLocation();
 
   // 프리지아의 메뉴 리스트
 const menuItems = [
-    { path: '/', label: '📝 오늘의 일기' },
+    { path: '/write', label: '📝 오늘의 일기' },
     { path: '/calendar', label: '📅 감정 달력' },
     { path: '/profile', label: '👤 내 정보' },
 ];
