@@ -9,6 +9,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 @Entity
 @Table(name = "diaries")
@@ -61,15 +62,15 @@ public class Diary {
 
     @Builder
     public Diary(Member member, String content, String emoji, LocalDate date,
-                 String emotion, Double sentimentScore, String aiComment) {
-        this.member         = member;
-        this.content        = content;
-        this.emoji          = emoji;
-        this.date           = date;
-        this.emotion        = emotion;
+            String emotion, Double sentimentScore, String aiComment) {
+        this.member = member;
+        this.content = content;
+        this.emoji = emoji;
+        this.date = date;
+        this.emotion = emotion;
         this.sentimentScore = sentimentScore;
-        this.aiComment      = aiComment;
-        this.status         = DiaryStatus.ACTIVE;
+        this.aiComment = aiComment;
+        this.status = DiaryStatus.ACTIVE;
     }
 
     public void update(String content, String emoji, LocalDate date) {
@@ -80,5 +81,15 @@ public class Diary {
 
     public void delete() {
         this.status = DiaryStatus.DELETED;
+    }
+
+    /**
+     * DB 에 INSERT 되기 직전에 호출됨.
+     * date 필드가 null 이면 서버의 현재 날짜 (KST) 를 자동 할당.
+     */
+    @PrePersist
+    public void prePersist() {
+        // this.date = LocalDate.now();
+        this.date = LocalDate.now(ZoneId.of("Asia/Seoul"));
     }
 }

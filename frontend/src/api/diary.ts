@@ -17,7 +17,7 @@ export interface DiaryResponse {
 export interface CreateDiaryRequest {
   content: string;
   emoji?: string;
-  date: string;
+  date?: string; // 선택적 필드 - 백엔드가 서버 시간으로 자동 설정
 }
 
 export const createDiary = async (body: CreateDiaryRequest): Promise<DiaryResponse> => {

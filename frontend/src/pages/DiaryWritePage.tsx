@@ -19,8 +19,8 @@ export default function DiaryWritePage() {
     setMessage('');
 
     try {
-      const today = new Date().toISOString().split('T')[0];
-      await createDiary({ content: content.trim(), date: today });
+      // 프론트엔드에서는 날짜를 전송하지 않음. 백엔드가 서버 시간으로 자동 설정
+      await createDiary({ content: content.trim() });
       setMessage('일기가 성공적으로 저장되었어요! 🌸');
       
       // 2 초 후 홈으로 이동
