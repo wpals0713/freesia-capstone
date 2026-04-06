@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   startOfMonth,
   getDaysInMonth,
@@ -10,6 +10,7 @@ import {
 } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import type { DiaryResponse } from '../api/diary';
+import { getCalendarDiaries, type DiaryCalendarResponse, getDiaryDetail, type DiaryDetailResponse } from '../api/diary';
 
 // 감정 타입 정의
 type EmotionType = '기쁨' | '슬픔' | '분노' | '불안' | '중립';
@@ -34,7 +35,14 @@ export default function EmotionCalendar({ diaries }: Props) {
   const [viewDate, setViewDate] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [showEmotionModal, setShowEmotionModal] = useState(false);
+  const [calendarDiaries, setCalendarDiaries] = useState<DiaryCalendarResponse[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [selectedDiaryDetail, setSelectedDiaryDetail] = useState<DiaryDetailResponse | null>(null);
   const today = new Date();
+
+  // memberId: 실제 구현 시 authStore 에서 가져와야 함 (임시 고정값)
+  const memberId = 1;
 
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth(); // 0-indexed
@@ -43,13 +51,55 @@ export default function EmotionCalendar({ diaries }: Props) {
   const startDow = getDay(startOfMonth(viewDate));
   const daysInMonth = getDaysInMonth(viewDate);
 
-  // 일기 맵: "YYYY-MM-DD" → emotion
-  const diaryMap: Record<string, string> = {};
-  diaries.forEach((d) => {
-    if (d.emotion && d.date) {
-      diaryMap[d.date.slice(0, 10)] = d.emotion;
+  // 백엔드 API 로 월별 일기 데이터 조회
+  useEffect(() => {
+    const fetchCalendarDiaries = async () => {
+      setLoading(true);
+      try {
+        const data = await getCalendarDiaries(memberId, year, month + 1);
+        setCalendarDiaries(data);
+      } catch (error) {
+        console.error('감정 달력 데이터 조회 실패:', error);
+        setCalendarDiaries([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCalendarDiaries();
+  }, [year, month, memberId]);
+
+  // 일기 맵: "YYYY-MM-DD" → DiaryCalendarResponse 전체 객체 (diaryId 포함)
+  const diaryMap: Record<string, DiaryCalendarResponse> = {};
+  calendarDiaries.forEach((d) => {
+    if (d.emotion && d.createdAt) {
+      diaryMap[d.createdAt] = d;
     }
   });
+
+  // 날짜 클릭 시 일기 상세 조회
+  const handleDateClick = async (day: number) => {
+    const mm = String(month + 1).padStart(2, '0');
+    const dd = String(day).padStart(2, '0');
+    const dateStr = `${year}-${mm}-${dd}`;
+    const diary = diaryMap[dateStr];
+
+    if (diary) {
+      try {
+        const detail = await getDiaryDetail(diary.diaryId);
+        setSelectedDiaryDetail(detail);
+        setIsDetailModalOpen(true);
+      } catch (error) {
+        console.error('일기 상세 조회 실패:', error);
+        alert('일기 상세를 불러오는데 실패했어요. 😭');
+      }
+    }
+  };
+
+  const closeDetailModal = () => {
+    setIsDetailModalOpen(false);
+    setSelectedDiaryDetail(null);
+  };
 
   // 달력 셀 배열: null=빈칸, number=날짜
   const cells: (number | null)[] = [
@@ -59,14 +109,6 @@ export default function EmotionCalendar({ diaries }: Props) {
   while (cells.length % 7 !== 0) cells.push(null);
 
   const monthLabel = format(viewDate, 'yyyy 년 M 월', { locale: ko });
-
-  const handleDateClick = (day: number) => {
-    const mm = String(month + 1).padStart(2, '0');
-    const dd = String(day).padStart(2, '0');
-    const dateStr = `${year}-${mm}-${dd}`;
-    setSelectedDate(dateStr);
-    setShowEmotionModal(true);
-  };
 
   const handleEmotionSelect = (emotion: EmotionType) => {
     if (selectedDate) {
@@ -135,7 +177,8 @@ export default function EmotionCalendar({ diaries }: Props) {
           const dateStr = `${year}-${mm}-${dd}`;
 
           const isToday = isSameDay(viewDate, new Date(year, month, day));
-          const emotion = diaryMap[dateStr] as EmotionType | undefined;
+          const diary = diaryMap[dateStr];
+          const emotion = diary?.emotion as unknown as EmotionType | undefined;
           const config = emotion ? EMOTION_CONFIG[emotion] : null;
           const dow = idx % 7; // 0=일, 6=토
 
@@ -150,8 +193,8 @@ export default function EmotionCalendar({ diaries }: Props) {
                   isToday
                     ? 'bg-gradient-to-br from-yellow-400 to-yellow-500 text-white shadow-lg scale-105'
                     : config
-                    ? `${config.bgColor} ${config.color} hover:scale-105`
-                    : 'bg-gray-50 hover:bg-yellow-50 hover:scale-105'
+                    ? `${config.bgColor} ${config.color} hover:scale-105 cursor-pointer`
+                    : 'bg-gray-50 hover:bg-yellow-50 hover:scale-105 cursor-default'
                 }
                 ${!isToday && !config ? 'text-gray-600' : ''}
               `}
@@ -252,6 +295,68 @@ export default function EmotionCalendar({ diaries }: Props) {
               className="w-full py-3 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold transition-colors duration-200"
             >
               취소
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 일기 상세 보기 모달 */}
+      {isDetailModalOpen && selectedDiaryDetail && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-fade-in" onClick={closeDetailModal}>
+          <div 
+            className="bg-white rounded-3xl p-8 max-w-lg w-full mx-4 shadow-2xl animate-scale-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 모달 헤더 */}
+            <div className="text-center mb-6">
+              <div className="text-4xl mb-2">
+                {selectedDiaryDetail.emoji || '📝'}
+              </div>
+              <h3 className="text-xl font-bold text-gray-800 mb-2">
+                📅 {selectedDiaryDetail.date}의 일기
+              </h3>
+              <p className="text-sm text-gray-500">
+                {new Date(selectedDiaryDetail.date).toLocaleDateString('ko-KR', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                  weekday: 'long',
+                })}
+              </p>
+            </div>
+
+            {/* 감정 표시 */}
+            {selectedDiaryDetail.emotion && (
+              <div className="text-center mb-6">
+                <span className="inline-block px-4 py-2 rounded-full bg-yellow-100 text-yellow-700 font-semibold">
+                  감정: {selectedDiaryDetail.emotion}
+                </span>
+              </div>
+            )}
+
+            {/* 일기 내용 */}
+            <div className="bg-gray-50 rounded-2xl p-6 mb-6">
+              <p className="text-gray-700 text-lg leading-relaxed whitespace-pre-wrap">
+                {selectedDiaryDetail.content}
+              </p>
+            </div>
+
+            {/* AI 위로 코멘트 */}
+            {selectedDiaryDetail.aiComment && (
+              <div className="mb-6">
+                <h4 className="text-sm font-semibold text-gray-600 mb-2">💌 AI 의 위로</h4>
+                <p className="text-gray-600 text-sm leading-relaxed bg-purple-50 rounded-xl p-4">
+                  {selectedDiaryDetail.aiComment}
+                </p>
+              </div>
+            )}
+
+            {/* 닫기 버튼 */}
+            <button
+              onClick={closeDetailModal}
+              className="w-full py-3 rounded-xl bg-yellow-400 hover:bg-yellow-500 text-white font-semibold transition-colors duration-200"
+            >
+              닫기
             </button>
           </div>
         </div>
