@@ -72,4 +72,16 @@ public class MemberService {
                 .orElseThrow(() -> new BusinessException("존재하지 않는 회원입니다.", HttpStatus.NOT_FOUND));
         return MemberResponseDTO.from(member);
     }
+
+    /**
+     * 닉네임 수정
+     * - dirty checking으로 별도 save() 없이 트랜잭션 커밋 시 자동 반영
+     */
+    @Transactional
+    public MemberResponseDTO updateMyNickname(Long memberId, String nickname) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new BusinessException("존재하지 않는 회원입니다.", HttpStatus.NOT_FOUND));
+        member.updateNickname(nickname);
+        return MemberResponseDTO.from(member);
+    }
 }

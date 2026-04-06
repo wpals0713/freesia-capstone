@@ -55,4 +55,8 @@ public class Member {
         this.provider = provider;
         this.status   = status;
     }
+
+    public void updateNickname(String nickname) {
+        this.nickname = nickname;
+    }
 }

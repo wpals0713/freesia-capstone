@@ -1,5 +1,6 @@
 package com.freesia.backend.diary.controller;
 
+import com.freesia.backend.diary.dto.DiaryCalendarResponse;
 import com.freesia.backend.diary.dto.DiaryRequestDTO;
 import com.freesia.backend.diary.dto.DiaryResponseDTO;
 import com.freesia.backend.diary.dto.DiaryStatisticsResponseDTO;
@@ -95,5 +96,19 @@ public class DiaryController {
             @PathVariable Long id) {
         diaryService.delete(userDetails.getMemberId(), id);
         return ResponseEntity.ok(ApiResponse.success("일기가 삭제되었습니다."));
+    }
+
+    /**
+     * GET /api/diaries/calendar
+     * 감정 달력용 일기 목록 조회 (월별)
+     */
+    @GetMapping("/calendar")
+    public ResponseEntity<ApiResponse<List<DiaryCalendarResponse>>> getCalendarDiaries(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestParam int year,
+            @RequestParam int month) {
+        List<DiaryCalendarResponse> response = diaryService.getCalendarDiaries(
+                userDetails.getMemberId(), year, month);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 }

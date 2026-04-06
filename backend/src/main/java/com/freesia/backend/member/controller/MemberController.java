@@ -5,6 +5,7 @@ import com.freesia.backend.global.security.CustomUserDetails;
 import com.freesia.backend.member.dto.JoinDTO;
 import com.freesia.backend.member.dto.LoginDTO;
 import com.freesia.backend.member.dto.MemberResponseDTO;
+import com.freesia.backend.member.dto.MemberUpdateRequestDTO;
 import com.freesia.backend.member.dto.TokenResponseDTO;
 import com.freesia.backend.member.service.MemberService;
 import jakarta.validation.Valid;
@@ -54,5 +55,17 @@ public class MemberController {
             @AuthenticationPrincipal CustomUserDetails userDetails) {
         MemberResponseDTO response = memberService.getMyInfo(userDetails.getMemberId());
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    /**
+     * PATCH /api/members/me
+     * 닉네임 수정 — JWT 토큰 인증 필요
+     */
+    @PatchMapping("/me")
+    public ResponseEntity<ApiResponse<MemberResponseDTO>> updateMyNickname(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @Valid @RequestBody MemberUpdateRequestDTO request) {
+        MemberResponseDTO response = memberService.updateMyNickname(userDetails.getMemberId(), request.nickname());
+        return ResponseEntity.ok(ApiResponse.success("닉네임이 수정되었습니다.", response));
     }
 }
