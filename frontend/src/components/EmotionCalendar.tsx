@@ -11,6 +11,7 @@ import {
 import { ko } from 'date-fns/locale';
 import type { DiaryResponse } from '../api/diary';
 import { getCalendarDiaries, type DiaryCalendarResponse, getDiaryDetail, type DiaryDetailResponse } from '../api/diary';
+import RecommendationList from './RecommendationList';
 
 // 감정 타입 정의
 type EmotionType = '기쁨' | '슬픔' | '분노' | '불안' | '중립';
@@ -178,7 +179,7 @@ export default function EmotionCalendar({ diaries }: Props) {
 
           const isToday = isSameDay(viewDate, new Date(year, month, day));
           const diary = diaryMap[dateStr];
-          const emotion = diary?.emotion as unknown as EmotionType | undefined;
+          const emotion = diary?.emotion as string as EmotionType | undefined;
           const config = emotion ? EMOTION_CONFIG[emotion] : null;
           const dow = idx % 7; // 0=일, 6=토
 
@@ -304,7 +305,7 @@ export default function EmotionCalendar({ diaries }: Props) {
       {isDetailModalOpen && selectedDiaryDetail && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-fade-in" onClick={closeDetailModal}>
           <div 
-            className="bg-white rounded-3xl p-8 max-w-lg w-full mx-4 shadow-2xl animate-scale-in"
+            className="bg-white rounded-3xl p-8 max-w-lg w-full mx-4 shadow-2xl animate-scale-in max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {/* 모달 헤더 */}
@@ -348,6 +349,13 @@ export default function EmotionCalendar({ diaries }: Props) {
                 <p className="text-gray-600 text-sm leading-relaxed bg-purple-50 rounded-xl p-4">
                   {selectedDiaryDetail.aiComment}
                 </p>
+              </div>
+            )}
+
+            {/* 오늘의 프리지아 추천 */}
+            {selectedDiaryDetail.emotion && (
+              <div className="mt-8 pt-6 border-t-2 border-yellow-100">
+                <RecommendationList emotion={selectedDiaryDetail.emotion} />
               </div>
             )}
 
