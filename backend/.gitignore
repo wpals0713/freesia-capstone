@@ -1,0 +1,11 @@
+build/
+.gradle/
+*.log
+*.class
+*.jar
+*.war
+*.ear
+.DS_Store
+
+# Secret configuration files
+application-secret.yml
