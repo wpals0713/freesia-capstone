@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
 import axios from 'axios';
+import './LoginPage.css';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
@@ -87,18 +88,27 @@ function LoginPage() {
         alert('간편 로그인 기능은 준비 중입니다.');
     };
 
-    // 로그아웃 처리
+    // 로그아웃 처리 (확인 팝업 추가 - 순서 엄수)
     const handleLogout = () => {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('tokenType');
-        localStorage.removeItem('expiresIn');
-        clearAuth();
-        navigate('/');
+        const confirmed = window.confirm('로그아웃 하시겠습니까?');
+        if (confirmed) {
+            // 1. 먼저 알림창 표시 (동기적으로)
+            window.alert('로그아웃 되었습니다.');
+            
+            // 2. 알림창이 닫힌 후 토큰 삭제
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('tokenType');
+            localStorage.removeItem('expiresIn');
+            clearAuth();
+            
+            // 3. 페이지 이동
+            navigate('/');
+        }
     };
 
     return (
-        <div style={styles.body}>
-            <div className="login-container" style={styles.loginContainer}>
+        <div className="login-page-root">
+            <div className="login-container">
                 <div className="logo-section" style={styles.logoSection}>
                     <div className="brand-icon" aria-hidden="true" style={styles.brandIcon}>
                         <svg viewBox="0 0 64 64" fill="none" style={styles.svg}>
@@ -232,26 +242,6 @@ function LoginPage() {
 
 // CSS 스타일 (기존 디자인 100% 유지)
 const styles: Record<string, React.CSSProperties> = {
-    body: {
-        fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-        background: 'linear-gradient(135deg, #fff8e1 0%, #ffe0b2 100%)',
-        minHeight: '100vh',
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        color: '#5c3b1e',
-        margin: 0,
-        padding: 0,
-    },
-    loginContainer: {
-        background: 'white',
-        borderRadius: '24px',
-        boxShadow: '0 20px 60px rgba(255, 181, 120, 0.35)',
-        padding: '48px 40px',
-        width: '100%',
-        maxWidth: '420px',
-        animation: 'fadeIn 0.5s ease-out',
-    },
     logoSection: {
         textAlign: 'center',
         marginBottom: '36px',

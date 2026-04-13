@@ -3,7 +3,6 @@ import axios from 'axios';
 import './MainPage.css';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
-const AI_SERVER_URL = import.meta.env.VITE_AI_SERVER_URL || 'http://localhost:5000';
 
 interface Message {
     id: number;
@@ -18,6 +17,8 @@ interface DiaryEntry {
     text: string;
     emotion: string;
     date: string;
+    aiComment?: string;
+    sentimentScore?: number;
 }
 
 interface Inquiry {
@@ -43,7 +44,7 @@ interface CalendarDayData {
 // 웰컴 메시지 데이터
 const WELCOME_MESSAGES = [
     {
-        title: "안녕하세요, 친구님! 👋",
+        title: "안녕하세요! 👋",
         message: "많이 힘드셨죠? 오늘은 아무 생각 말고 이곳에 당신의 하루를 털어놓아 보세요. 프리지아가 당신의 이야기를 들어드릴게요."
     },
     {
@@ -90,63 +91,14 @@ const RECOMMENDATION_POPUP_DATA: Record<string, RecommendationPopupData> = {
     }
 };
 
-// 감정별 리액션 응답
-const EMOTION_REACTIONS: Record<string, string[]> = {
-    '기쁨': [
-        '기쁨을 느끼고 계시는군요! 🌟 그 기분을 오래 간직할 수 있도록 함께 노력해봐요!',
-        '행복한 하루가 되셨다니 저도 기쁩니다! 😊 더 많은 기쁨을 만나길 바라요!',
-        '기쁜 마음이 전해지네요! ✨ 이런 긍정적인 감정이 하루를 밝게 만들어요!'
-    ],
-    '슬픔': [
-        '슬픔을 느끼고 계시는군요. 😢 감정은 자연스러운 것이에요. 그 감정을 인정하고 함께 이겨내요.',
-        '슬픈 감정을 기록하셨네요. 💙 때로는 슬픔도 성장의 일부예요. 말씀해 주시면 듣겠습니다.',
-        '지금 마음이 무겁으신가요? 😢 건강한 감정 표현이 중요합니다. 함께 해요!'
-    ],
-    '분노': [
-        '분노를 느끼고 계시는군요. 😡 그 감정을 표현해주셔서 고마워요. 심호흡을 하며 차분하게 생각해봐요.',
-        '분노는 자연스러운 감정입니다. 👊 그 감정을 건설적인 방법으로 해소해봐요.',
-        '지금 화가 많이 나셨군요. 😤 그 감정을 인정하고, 왜 화가 났는지 생각해보세요.'
-    ],
-    '즐거움': [
-        '즐거움을 느끼고 계시네요! 🎉 그런 긍정적인 에너지가 저에게도 전달돼요!',
-        '즐거운 하루 되세요! 🌈 이런 멋진 감정은 계속 유지하세요!',
-        '즐거운 마음을 함께 나눠주셔서 감사해요! 🎊 더 많은 즐거운 순간을 만나길 바라요!'
-    ]
-};
-
-// 추천 콘텐츠 데이터
-const RECOMMENDATIONS: Record<string, any[]> = {
-    '슬픔': [
-        { tag: '노래 추천 🎵', title: '잔잔한 위로 플레이리스트', desc: '차분한 어쿠스틱과 재즈로 마음의 물결을 가라앉혀요.', url: 'https://www.youtube.com/results?search_query=%EC%9C%84%EB%A1%9C+%EC%9E%90%EB%8A%94+%EC%9E%90%EC%9E%90%ED%95%9C+%ED%94%8C%EB%A0%88%EC%9D%B4%EB%A6%AC%EC%8A%A4%ED%8A%B8' },
-        { tag: '글귀 추천 ✍️', title: '오늘의 위로 문장', desc: '"당신의 가치는 흔들리지 않아요. 오늘도 충분히 잘했어요."', url: 'https://www.google.com/search?q=%EC%9C%84%EB%A1%9C+%EB%AC%B8%EA%B5%AC' },
-        { tag: '호흡 가이드 🧘', title: '4-7-8 호흡법', desc: '4 초 들숨, 7 초 멈춤, 8 초 날숨을 4 회 반복하면 긴장이 완화돼요.', url: 'https://www.google.com/search?q=4-7-8+%ED%98%B8%ED%9E%88%EA%B8%88' }
-    ],
-    '분노': [
-        { tag: '운동 추천 🏃', title: '5 분 체력 회복 루틴', desc: '짧고 안전한 전신 루틴으로 화의 에너지를 건강하게 분출해요.', url: 'https://www.youtube.com/results?search_query=5%EB%B6%84+%ED%9A%8C%EB%B3%B5+%EB%A3%A8%ED%8B%B4' },
-        { tag: '글쓰기 📝', title: '감정 명료화 프롬프트', desc: '"정확히 무엇이 불공정했나요?" "바라는 경계는 무엇인가요?"', url: 'https://www.google.com/search?q=%EA%B0%90%EC%A0%95+%EA%B8%80%EC%93%B0%EA%B8%B0+%ED%94%84%EB%A1%AC%ED%94%84%ED%8A%B8' },
-        { tag: '음악 🎧', title: '에너지 배출 트랙', desc: '빠른 템포 음악으로 순한 배출을 돕는 셋리스트.', url: 'https://www.youtube.com/results?search_query=%ED%85%9C%ED%8F%AC+%EB%B9%A0%EB%A5%B8+%EC%9D%8C%EC%95%85' }
-    ],
-    '기쁨': [
-        { tag: '기록 📔', title: '감사 3 가지', desc: '지금 고마운 세 가지를 적고, 이유를 곁들여보세요.', url: 'https://www.google.com/search?q=%EA%B0%90%EC%82%AC+%EC%9D%BC%EA%B8%B0' },
-        { tag: '공유 💬', title: '작은 기쁨 나누기', desc: '가까운 사람에게 오늘의 하이라이트 한 줄 보내기.', url: 'https://www.google.com/search?q=%EA%B8%B0%EC%81%A8+%EA%B3%B5%EC%9C%A0' },
-        { tag: '음악 🎵', title: '밝은 무드 재생목록', desc: '상승 기분을 살짝 더 끌어올리는 팝/시티팝.', url: 'https://www.youtube.com/results?search_query=%EB%B0%9D%EC%9D%80+%EB%AC%B4%EB%93%9C+%EC%9E%AC%EC%83%9D%EB%AA%A9%EB%A1%9D' },
-        { tag: '글귀 추천 ✍️', title: '오늘의 긍정 한 줄', desc: '"작은 기쁨을 발견하는 눈이 큰 행복을 부른다."', url: 'https://www.google.com/search?q=%EA%B8%8D%EC%A0%95+%EB%AC%B8%EA%B5%AC' }
-    ],
-    '즐거움': [
-        { tag: '확장 🎯', title: '플로우 활동 20 분', desc: '몰입을 느끼는 취미를 짧게라도 시작해요.', url: 'https://www.google.com/search?q=%ED%94%8C%EB%A1%9C%EC%9A%B0+%ED%99%9C%EB%8F%99' },
-        { tag: '기록 📷', title: '한 장의 사진', desc: '지금 순간을 사진으로 남기고 한 줄 캡션.', url: 'https://www.google.com/search?q=%ED%95%9C%EC%9E%A5%EC%9D%98+%EC%82%AC%EC%A7%84+%EC%9D%BC%EA%B8%B0' },
-        { tag: '음악 🎶', title: '기분 좋은 리듬', desc: '경쾌한 리듬으로 긍정의 여운을 유지해요.', url: 'https://www.youtube.com/results?search_query=%EA%B2%BD%EA%BE%8C%ED%95%9C+%EB%A6%AC%EB%93%AC' },
-        { tag: '글귀 추천 ✍️', title: '즐거움 유지 한 줄', desc: '"기쁨은 나누면 배가 된다." 지금 누군가와 공유해요.', url: 'https://www.google.com/search?q=%EA%B8%B0%EB%B6%84+%EA%B8%80%EA%B5%AC' }
-    ]
-};
-
-// 감정 이모지 매핑
+// 감정 이모지 매핑 (캘린더용 - 일기장 아이콘으로 통일)
 const EMOTION_EMOJI: Record<string, string> = {
-    '기쁨': '😊',
-    '슬픔': '😢',
-    '분노': '😡',
-    '즐거움': '😄',
-    '중립': '📝'
+    '기쁨': '📝',
+    '슬픔': '📝',
+    '분노': '📝',
+    '즐거움': '📝',
+    '중립': '📝',
+    '불안': '📝'
 };
 
 // 공감 이모지 매핑
@@ -155,7 +107,8 @@ const EMPATHY_EMOJI: Record<string, string> = {
     '즐거움': '✨',
     '슬픔': '🥺',
     '분노': '😢',
-    '중립': '💙'
+    '중립': '💙',
+    '불안': '😨'
 };
 
 function MainPage() {
@@ -165,18 +118,13 @@ function MainPage() {
     // 웰컴 메시지 팝업 상태
     const [isWelcomeOpen, setIsWelcomeOpen] = useState(false);
     const [visibleWelcomeIndex, setVisibleWelcomeIndex] = useState(-1);
-    const [welcomeAnimationComplete, setWelcomeAnimationComplete] = useState(false);
     
     // 채팅 관련 상태
-    const [messages, setMessages] = useState<Message[]>([]);
+    const [messages, setMessages] = useState<Message[]>([
+        { id: 0, text: '오늘 하루의 이야기를 들려주세요 🌼', sender: 'bot' }
+    ]);
     const [userInput, setUserInput] = useState('');
     const [typing, setTyping] = useState(false);
-    
-    // 일기 모드 상태
-    const [selectedEmotion, setSelectedEmotion] = useState<string | null>(null);
-    const [diaryStep, setDiaryStep] = useState(0); // 0: 초기, 1: 감정 선택됨, 2: 일기 작성 완료
-    const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>([]);
-    const [hasWrittenToday, setHasWrittenToday] = useState(false);
     
     // 현재 화면
     const [currentView, setCurrentView] = useState<'chat' | 'calendar' | 'graph' | 'recommendations' | 'myInfo'>('chat');
@@ -184,15 +132,38 @@ function MainPage() {
     // 캘린더/그래프 상태
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const [graphMonth, setGraphMonth] = useState(new Date());
-    const [viewingDate, setViewingDate] = useState<string | null>(null);
     const [calendarDayData, setCalendarDayData] = useState<CalendarDayData[]>([]);
     
-    // 추천 상태
-    const [recommendations, setRecommendations] = useState<any[]>([]);
+    // 로딩 상태
+    const [isLoading, setIsLoading] = useState(true);
+    
+    // UI 연동: 일기가 없는 날짜 모달
+    const [emptyDateModalOpen, setEmptyDateModalOpen] = useState(false);
+    const [emptyDateModalText, setEmptyDateModalText] = useState('');
+    
+    // 아코디언 모달 상태 - 여러 일기를 위한 배열
+    const [selectedDiaries, setSelectedDiaries] = useState<DiaryEntry[]>([]);
+    const [expandedDiaryIndex, setExpandedDiaryIndex] = useState<number | null>(null);
+    
+    // UI 연동: 그래프 데이터
+    const [graphData, setGraphData] = useState<{ emotion: string; count: number }[]>([]);
+    
+    // UI 연동: 캘린더 상세 데이터용 일기 목록
+    const [diaries, setDiaries] = useState<any[]>([]);
+    
+    // 추천 상태 (추천 화면에서 사용)
+    const [recommendations] = useState<any[]>([]);
     
     // 추천 콘텐츠 팝업 상태
     const [isRecommendationPopupOpen, setIsRecommendationPopupOpen] = useState(false);
     const [popupEmotion, setPopupEmotion] = useState<string>('기쁨');
+    
+    // 콘텐츠 플레이어 상태
+    const [isPlayerOpen, setIsPlayerOpen] = useState(false);
+    const [currentPlayerDiary, setCurrentPlayerDiary] = useState<DiaryEntry | null>(null);
+    
+    // 치유 보관함 상태
+    const [isHealingLibraryOpen, setIsHealingLibraryOpen] = useState(false);
     
     // 문의하기 상태
     const [isInquiryOpen, setIsInquiryOpen] = useState(false);
@@ -203,16 +174,12 @@ function MainPage() {
     // 통계 상태
     const [statistics, setStatistics] = useState<DiaryStatistics | null>(null);
     
-    // 설정 팝업 상태
-    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-    
     // 메시지 컨테이너 참조
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const chatMessagesRef = useRef<HTMLDivElement>(null);
     
     // 웰컴 메시지 애니메이션
     useEffect(() => {
-        // 페이지 로드 시 웰컴 메시지 표시
         const welcomeKey = 'freesiaWelcomeShown';
         const hasShownWelcome = sessionStorage.getItem(welcomeKey) === 'true';
         
@@ -229,17 +196,13 @@ function MainPage() {
     // 웰컴 메시지 표시
     const showWelcomeMessage = (index: number) => {
         if (index >= WELCOME_MESSAGES.length) {
-            setWelcomeAnimationComplete(true);
             setTimeout(() => {
                 setIsWelcomeOpen(false);
-                setWelcomeAnimationComplete(false);
             }, 1500);
             return;
         }
         
         setVisibleWelcomeIndex(index);
-        
-        // 다음 메시지 표시 대기
         setTimeout(() => {
             showWelcomeMessage(index + 1);
         }, 3000);
@@ -253,41 +216,68 @@ function MainPage() {
     
     // 설정 버튼 클릭
     const handleSettingsClick = () => {
-        alert('⚙️ 설정 기능이 곧 추가됩니다!\n\n- 알림 설정\n- 개인정보 관리\n- 데이터 백업/복원\n- 앱 버전 정보');
+        alert('⚙️ 설정 기능이 곧 추가됩니다!');
     };
     
-    // 초기 메시지 및 데이터 로드
-    useEffect(() => {
-        if (currentView === 'chat' && messages.length === 0 && !isWelcomeOpen) {
-            // 초기 데이터 로드 (일기 목록, 통계)
-            loadInitialData();
+    // 현재 월의 일기 데이터만 필터링하는 함수
+    const filterDiariesByMonth = (diaries: any[], month: Date): any[] => {
+        const year = month.getFullYear();
+        const monthNum = month.getMonth() + 1;
+        return diaries.filter((diary: any) => {
+            if (!diary.date) return false;
+            const [y, m] = diary.date.split('-').map(Number);
+            return y === year && m === monthNum;
+        });
+    };
+    
+    // 현재 월의 통계 데이터만 필터링하는 함수 (데이터 없는 월 초기화 포함)
+    const filterStatisticsByMonth = (diaries: any[], month: Date) => {
+        const filteredDiaries = filterDiariesByMonth(diaries, month);
+        const emotionCounts: Record<string, number> = {};
+        let totalScore = 0;
+        
+        filteredDiaries.forEach((diary: any) => {
+            const emotion = diary.emotion || '중립';
+            emotionCounts[emotion] = (emotionCounts[emotion] || 0) + 1;
+            totalScore += diary.sentimentScore || 0;
+        });
+        
+        const count = filteredDiaries.length;
+        const avgScore = count > 0 ? totalScore / count : 0;
+        
+        // 데이터가 없는 경우 모든 감정을 0 으로 초기화 (6 개 감정 모두)
+        if (count === 0) {
+            return {
+                totalDiaries: 0,
+                emotionDistribution: [
+                    { emotion: '기쁨', count: 0 },
+                    { emotion: '슬픔', count: 0 },
+                    { emotion: '분노', count: 0 },
+                    { emotion: '즐거움', count: 0 },
+                    { emotion: '중립', count: 0 },
+                    { emotion: '불안', count: 0 }
+                ],
+                averageScore: 0
+            };
         }
-    }, [currentView, isWelcomeOpen]);
-    
-    // 스크롤 자동 하단으로
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages, typing]);
-    
-    // 일기 모드 시작
-    const startDiaryMode = () => {
-        setChatMode('diary');
-        setDiaryStep(0);
-        setSelectedEmotion(null);
-        setMessages([]);
-        addBotMessage('오늘 하루의 이야기를 들려주세요 🌼');
+        
+        return {
+            totalDiaries: count,
+            emotionDistribution: Object.entries(emotionCounts).map(([emotion, count]) => ({ emotion, count })),
+            averageScore: avgScore
+        };
     };
     
-    // 초기 데이터 로드 (일기 목록, 통계)
+    // 초기 데이터 로드 (모든 일기 데이터를 가져옴)
     const loadInitialData = async () => {
         try {
             const token = localStorage.getItem('accessToken');
             if (!token) {
-                console.log('토큰이 없습니다.');
+                setIsLoading(false);
                 return;
             }
             
-            // 1. 일기 목록 조회
+            // 1. 일기 목록 조회 (전체 데이터)
             const diaryResponse = await axios.get(
                 `${API_BASE_URL}/api/diaries`,
                 {
@@ -298,56 +288,83 @@ function MainPage() {
                 }
             );
             
-            // ApiResponse.data 에서 실제 데이터 추출
-            const diaries = diaryResponse.data.data || [];
-            console.log('📥 초기 일기 데이터 로드:', diaries.length, '편');
+            const allDiaries = diaryResponse.data.data || [];
+            console.log('📥 초기 일기 데이터 로드:', allDiaries.length, '편');
             
-            // 일기 목록을 메시지 형태로 변환
-            const initialMessages: Message[] = diaries.map((diary: any) => ({
-                id: diary.id,
-                text: diary.content,
-                sender: 'user' as const
-            }));
-            setMessages(initialMessages);
+            // 2. 현재 월 기준으로 필터링된 데이터 설정 (setDiaries 전에 계산)
+            const currentMonthDiaries = filterDiariesByMonth(allDiaries, currentMonth);
+            const currentMonthStats = filterStatisticsByMonth(allDiaries, currentMonth);
             
-            // 캘린더 데이터도 함께 로드
-            const dayData: CalendarDayData[] = diaries.map((diary: any) => ({
-                date: diary.createdAt ? diary.createdAt.substring(0, 10) : diary.date,
+            // 3. 상태 업데이트 (순차적으로)
+            setDiaries(allDiaries);
+            
+            // 캘린더 데이터 설정
+            const dayData: CalendarDayData[] = currentMonthDiaries.map((diary: any) => ({
+                date: diary.date || '',
                 emotion: diary.emotion || '중립'
             }));
             setCalendarDayData(dayData);
             
-            // 2. 통계 데이터 조회 (현재 달 기준)
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = now.getMonth() + 1;
+            // 통계 데이터 설정
+            setStatistics(currentMonthStats);
             
-            try {
-                const statsResponse = await axios.get(
-                    `${API_BASE_URL}/api/diaries/statistics`,
-                    {
-                        params: { year, month },
-                        headers: {
-                            Authorization: `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                        }
-                    }
-                );
-                setStatistics(statsResponse.data.data);
-            } catch (statsError) {
-                console.log('통계 데이터 로드 실패 (데이터가 없을 수 있음):', statsError);
+            // 그래프 데이터 설정 (현재 월 기준) - 데이터가 없는 경우 강제 초기화
+            if (currentMonthDiaries.length === 0) {
+                // 데이터가 0 개일 경우 모든 감정을 0 으로 강제 초기화 (6 개 감정 모두)
+                setGraphData([
+                    { emotion: '기쁨', count: 0 },
+                    { emotion: '슬픔', count: 0 },
+                    { emotion: '분노', count: 0 },
+                    { emotion: '즐거움', count: 0 },
+                    { emotion: '중립', count: 0 },
+                    { emotion: '불안', count: 0 }
+                ]);
+            } else {
+                const emotionCounts: Record<string, number> = {};
+                currentMonthDiaries.forEach((diary: any) => {
+                    const emotion = diary.emotion || '중립';
+                    emotionCounts[emotion] = (emotionCounts[emotion] || 0) + 1;
+                });
+                // 6 개 감정 모두 포함하여 초기화
+                const graphDataArray = [
+                    { emotion: '기쁨', count: emotionCounts['기쁨'] || 0 },
+                    { emotion: '슬픔', count: emotionCounts['슬픔'] || 0 },
+                    { emotion: '분노', count: emotionCounts['분노'] || 0 },
+                    { emotion: '즐거움', count: emotionCounts['즐거움'] || 0 },
+                    { emotion: '중립', count: emotionCounts['중립'] || 0 },
+                    { emotion: '불안', count: emotionCounts['불안'] || 0 }
+                ];
+                setGraphData(graphDataArray);
             }
             
         } catch (error) {
             console.error('초기 데이터 로드 실패:', error);
+        } finally {
+            // 데이터 로드 완료 후 로딩 상태 해제
+            setIsLoading(false);
         }
     };
     
-    // 일기 모드 시작 (텍스트 입력만)
-    const startDiaryModeTextInput = () => {
+    // React 생명주기: 컴포넌트 마운트 시 데이터 로드 (의존성 배열 최적화)
+    useEffect(() => {
+        loadInitialData();
+    }, [currentMonth]); // currentMonth 변경 시에도 데이터 재로드
+    
+    // 스크롤 자동 하단으로
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [messages, typing]);
+    
+    // 그래프 렌더링: graph 화면이 표시될 때만 실행 (데이터가 0 인 경우도 포함)
+    useEffect(() => {
+        if (currentView === 'graph' && !isLoading) {
+            renderBarChart(graphData);
+        }
+    }, [currentView, graphData, isLoading]); // isLoading 추가하여 데이터 로드 완료 후 렌더링
+    
+    // 일기 모드 시작
+    const startDiaryMode = () => {
         setChatMode('diary');
-        setDiaryStep(0);
-        setSelectedEmotion(null);
         setMessages([]);
         addBotMessage('오늘 하루의 이야기를 들려주세요 🌼');
     };
@@ -355,23 +372,8 @@ function MainPage() {
     // 일반 채팅 모드로 복귀
     const exitDiaryMode = () => {
         setChatMode('chat');
-        setDiaryStep(0);
-        setSelectedEmotion(null);
         setMessages([]);
         addBotMessage('안녕하세요! 오늘 하루는 어떠셨나요? 자유롭게 대화해보세요!');
-    };
-    
-    // 감정 버튼 클릭 (일반 채팅 모드에서만 사용)
-    const handleEmotionClick = (emotion: string) => {
-        if (chatMode === 'chat') {
-            // 일반 채팅 모드: 감정 기반 응답
-            setTyping(true);
-            setTimeout(() => {
-                setTyping(false);
-                const reaction = getEmotionReaction(emotion);
-                addBotMessage(reaction);
-            }, 800);
-        }
     };
     
     // 메시지 전송
@@ -387,33 +389,34 @@ function MainPage() {
             
             setTimeout(() => {
                 setTyping(false);
-                const botResponse = generateBotResponse(message);
+                const botResponse = generateBotResponse();
                 addBotMessage(botResponse);
             }, 1000);
         } else {
-            // 일기 모드: 일기 내용 작성 완료
+            // 일기 모드
+            addUserMessage(message);
             setUserInput('');
-            
-            // 분석 중 메시지 표시
             addBotMessage('감정을 분석 중입니다...');
             
-            // 일기 저장 - 텍스트와 JWT 토큰만 사용 (백엔드에서 자동 감정 분석)
             const todayKey = formatDateKey(new Date());
             
             try {
                 const token = localStorage.getItem('accessToken');
                 
                 if (!token) {
-                    alert('로그인이 필요합니다. 다시 로그인해주세요.');
+                    alert('로그인이 필요합니다.');
+                    setMessages(prev => prev.filter(msg => !msg.text.includes('감정을 분석 중입니다...')));
                     return;
                 }
                 
-                // 1. 백엔드 API 로 일기 저장
-                console.log("📡 [1. Backend Request] Sending to /api/diaries:", { content: message, date: todayKey });
+                console.log("📡 [Backend Request] Sending to /api/diaries:", { content: message, date: todayKey });
                 
                 const diaryResponse = await axios.post(
                     `${API_BASE_URL}/api/diaries`,
-                    { content: message, date: todayKey },
+                    { 
+                        content: message, 
+                        date: todayKey
+                    },
                     {
                         headers: {
                             Authorization: `Bearer ${token}`,
@@ -422,128 +425,127 @@ function MainPage() {
                     }
                 );
                 
-                // 백엔드 응답 확인 (ApiResponse 구조)
-                console.log("✅ [2. Backend Response] Received from /api/diaries:", diaryResponse.data);
+                console.log("✅ [Backend Response] Received from /api/diaries:", diaryResponse.data);
                 
-                // ApiResponse.success 확인
                 if (!diaryResponse.data.success) {
-                    alert(`일기 저장 실패: ${diaryResponse.data.message}`);
-                    // 분석 중 메시지 제거
+                    setMessages(prev => {
+                        const filteredMessages = prev.filter(msg => 
+                            !msg.text.includes('감정을 분석 중입니다...') && 
+                            !msg.text.includes('저장 실패')
+                        );
+                        return [...filteredMessages, { 
+                            id: Date.now(), 
+                            text: `❌ 저장 실패: ${diaryResponse.data.message}`, 
+                            sender: 'user' 
+                        }];
+                    });
                     setMessages(prev => prev.filter(msg => !msg.text.includes('감정을 분석 중입니다...')));
                     return;
                 }
                 
-                // 백엔드에서 반환한 감정 정보
-                const backendEmotion = diaryResponse.data.data.emotion || '중립';
+                // 백엔드 응답 데이터 매핑 확인 (실제 API 응답 구조에 맞게)
+                const backendEmotion = diaryResponse.data.data.dominantEmotion || diaryResponse.data.data.emotion || '중립';
+                const aiComment = diaryResponse.data.data.aiComment || diaryResponse.data.data.comment || '감정을 분석했습니다.';
+                const sentimentScore = diaryResponse.data.data.sentimentScore || diaryResponse.data.data.score || 0;
+                const empathyEmoji = getEmpathyEmoji(backendEmotion);
                 
-                // 2. AI 감정 분석 (POST /api/analyze)
-                console.log("🤖 [3. AI Server Request] Sending to /api/analyze:", { text: message });
+                console.log("✅ [백엔드 응답] 감정 분석 완료 — emotion:", backendEmotion, "comment:", aiComment, "score:", sentimentScore);
                 
                 setTyping(true);
-                try {
-                    const aiResponse = await axios.post(
-                        `${AI_SERVER_URL}/api/analyze`,
-                        { text: message },
-                        {
-                            headers: {
-                                Authorization: `Bearer ${token}`,
-                                'Content-Type': 'application/json'
-                            }
-                        }
+                
+                setMessages(prev => {
+                    const filteredMessages = prev.filter(msg => 
+                        !msg.text.includes('감정을 분석 중입니다...')
                     );
-                    
-                    // AI 서버 응답 로그
-                    console.log("✨ [4. AI Server Response] Received from /api/analyze:", aiResponse.data);
-                    
-                    const { aiComment, emotion } = aiResponse.data;
-                    const empathyEmoji = getEmpathyEmoji(backendEmotion);
-                    
-                    // 분석 중 메시지 제거하고 새로운 결과 추가 (화면 증발 방지)
-                    setMessages(prev => {
-                        // "감정을 분석 중입니다..." 메시지 제거
-                        const filteredMessages = prev.filter(msg => 
-                            !msg.text.includes('감정을 분석 중입니다...')
-                        );
-                        // 분석 결과 추가
-                        return [...filteredMessages, { 
-                            id: Date.now(), 
-                            text: `${backendEmotion}하셨군요... ${aiComment} ${empathyEmoji}`, 
-                            sender: 'bot' 
-                        }];
-                    });
-                    
-                    // 3. 통계 데이터 새로고침
-                    await loadStatistics();
-                    
-                    // 4. 캘린더 데이터 새로고침
-                    await loadCalendarData();
-                    
-                    // 5. 추천 콘텐츠 표시 (메시지 추가 후 버튼 표시)
-                    setTimeout(() => {
-                        addBotMessage('🎁 당신을 위한 추천 콘텐츠가 도착했습니다');
-                        showRecommendations(backendEmotion);
-                    }, 1000);
-                    
-                    setTyping(false);
-                    
-                    // 6. 추천 콘텐츠 버튼 표시
-                    setTimeout(() => {
-                        addBotMessage('👇 AI 가 추천 콘텐츠 보기를 눌러보세요');
-                    }, 1500);
-                    
-                    // 7. 추천 콘텐츠 버튼 추가 (AI 답변 말풍선 아래에)
-                    setTimeout(() => {
-                        setMessages(prev => [...prev, { 
-                            id: Date.now() + 1, 
-                            text: `AI 가 추천 콘텐츠 보기`, 
-                            sender: 'bot',
-                            isRecommendationButton: true,
-                            emotion: backendEmotion
-                        }]);
-                    }, 2000);
-                    
-                } catch (aiError) {
-                    setTyping(false);
-                    console.error('AI 분석 실패:', aiError);
-                    // 실패 시 더미 응답 (분석 중 메시지 제거)
-                    setMessages(prev => {
-                        const filteredMessages = prev.filter(msg => 
-                            !msg.text.includes('감정을 분석 중입니다...')
-                        );
-                        const empathyEmoji = getEmpathyEmoji(backendEmotion);
-                        return [...filteredMessages, { 
-                            id: Date.now(), 
-                            text: `${backendEmotion}하셨군요... 공감합니다. ${empathyEmoji}`, 
-                            sender: 'bot' 
-                        }];
-                    });
-                    
-                    // 통계/캘린더도 새로고침
-                    await loadStatistics();
-                    await loadCalendarData();
-                    
-                    setTimeout(() => {
-                        addBotMessage('🎁 당신을 위한 추천 콘텐츠가 도착했습니다');
-                        showRecommendations(backendEmotion);
-                    }, 1000);
-                }
+                    return [...filteredMessages, { 
+                        id: Date.now(), 
+                        text: `${backendEmotion}하셨군요... ${aiComment} ${empathyEmoji}`, 
+                        sender: 'bot' 
+                    }];
+                });
+                
+                setTyping(false);
+                
+                // 1. 새 일기를 전역 diaries 상태에 즉시 추가 (실시간 동기화)
+                const newDiaryEntry = {
+                    id: diaryResponse.data.data.id,
+                    content: message,
+                    date: todayKey,
+                    emotion: backendEmotion,
+                    aiComment: aiComment,
+                    sentimentScore: sentimentScore
+                };
+                setDiaries(prev => [...prev, newDiaryEntry]);
+                
+                // 2. 현재 월 기준으로 필터링된 데이터 재계산 (실시간 반영) - prev 사용으로 최신 상태 참조
+                const updatedDiaries = [...diaries, newDiaryEntry];
+                const currentMonthDiaries = filterDiariesByMonth(updatedDiaries, currentMonth);
+                const currentMonthStats = filterStatisticsByMonth(updatedDiaries, currentMonth);
+                
+                // 3. 캘린더 데이터 업데이트
+                const dayData: CalendarDayData[] = currentMonthDiaries.map((diary: any) => ({
+                    date: diary.date || '',
+                    emotion: diary.emotion || '중립'
+                }));
+                setCalendarDayData(dayData);
+                
+                // 4. 통계 데이터 업데이트
+                setStatistics(currentMonthStats);
+                
+                // 5. 그래프 데이터 업데이트 (6 개 감정 모두 포함)
+                const emotionCounts: Record<string, number> = {};
+                currentMonthDiaries.forEach((diary: any) => {
+                    const emotion = diary.emotion || '중립';
+                    emotionCounts[emotion] = (emotionCounts[emotion] || 0) + 1;
+                });
+                const graphDataArray = [
+                    { emotion: '기쁨', count: emotionCounts['기쁨'] || 0 },
+                    { emotion: '슬픔', count: emotionCounts['슬픔'] || 0 },
+                    { emotion: '분노', count: emotionCounts['분노'] || 0 },
+                    { emotion: '즐거움', count: emotionCounts['즐거움'] || 0 },
+                    { emotion: '중립', count: emotionCounts['중립'] || 0 },
+                    { emotion: '불안', count: emotionCounts['불안'] || 0 }
+                ];
+                setGraphData(graphDataArray);
+                
+                // 추천 버튼 추가
+                setTimeout(() => {
+                    setMessages(prev => [...prev, { 
+                        id: Date.now() + 1, 
+                        text: `AI 가 추천 콘텐츠 보기`, 
+                        sender: 'bot',
+                        isRecommendationButton: true,
+                        emotion: backendEmotion
+                    }]);
+                }, 1000);
                 
             } catch (error: any) {
                 console.error('일기 저장 실패:', error);
-                // API 실패 시 alert 표시 및 분석 중 메시지 제거
-                const errorMsg = error.response?.data?.message || '일기 저장에 실패했습니다. 다시 시도해주세요.';
+                const errorMsg = error.response?.data?.message || '일기 저장에 실패했습니다.';
                 alert(`저장 실패: ${errorMsg}`);
+                setMessages(prev => {
+                    const filteredMessages = prev.filter(msg => 
+                        !msg.text.includes('감정을 분석 중입니다...') && 
+                        !msg.text.includes('저장 실패')
+                    );
+                    return [...filteredMessages, { 
+                        id: Date.now(), 
+                        text: `❌ 저장 실패: ${errorMsg}`, 
+                        sender: 'user' 
+                    }];
+                });
                 setMessages(prev => prev.filter(msg => !msg.text.includes('감정을 분석 중입니다...')));
             }
         }
     };
     
-    // 통계 데이터 로드
-    const loadStatistics = async () => {
+    // 통계 데이터 로드 (월별 필터링)
+    const loadStatistics = async (monthToLoad?: Date) => {
         try {
             const token = localStorage.getItem('accessToken');
-            const year = currentMonth.getFullYear();
-            const month = currentMonth.getMonth() + 1;
+            const targetMonth = monthToLoad || currentMonth;
+            const year = targetMonth.getFullYear();
+            const month = targetMonth.getMonth() + 1;
             
             const response = await axios.get(
                 `${API_BASE_URL}/api/diaries/statistics`,
@@ -556,8 +558,25 @@ function MainPage() {
                 }
             );
             
-            // ApiResponse 계층 처리: response.data.data
-            setStatistics(response.data.data);
+            const statsData = response.data.data;
+            if (statsData) {
+                const stats = {
+                    totalDiaries: statsData.totalCount || 0,
+                    emotionDistribution: statsData.emotionCounts 
+                        ? Object.entries(statsData.emotionCounts).map(([emotion, count]) => ({ emotion, count: Number(count) }))
+                        : [],
+                    averageScore: statsData.averageSentimentScore || 0
+                };
+                setStatistics(stats);
+                
+                // 그래프 데이터도 월별로 필터링
+                const emotionCounts: Record<string, number> = statsData.emotionCounts || {};
+                const graphDataArray = Object.entries(emotionCounts).map(([emotion, count]) => ({
+                    emotion,
+                    count: Number(count)
+                }));
+                setGraphData(graphDataArray);
+            }
         } catch (error) {
             console.error('통계 데이터 로드 실패:', error);
         }
@@ -567,9 +586,13 @@ function MainPage() {
     const loadCalendarData = async () => {
         try {
             const token = localStorage.getItem('accessToken');
+            const year = currentMonth.getFullYear();
+            const month = currentMonth.getMonth() + 1;
+            
             const response = await axios.get(
-                `${API_BASE_URL}/api/diaries`,
+                `${API_BASE_URL}/api/diaries/calendar`,
                 {
+                    params: { year, month },
                     headers: {
                         Authorization: `Bearer ${token}`,
                         'Content-Type': 'application/json'
@@ -577,35 +600,48 @@ function MainPage() {
                 }
             );
             
-            // ApiResponse 계층 처리: response.data.data
-            const diaries = response.data.data || response.data;
+            const calendarData = response.data.data || [];
             
-            // 날짜별 감정 데이터로 변환 (createdAt 필드 사용)
-            const dayData: CalendarDayData[] = diaries.map((diary: any) => ({
-                date: diary.createdAt ? diary.createdAt.substring(0, 10) : diary.date,
-                emotion: diary.emotion || '중립'
+            const dayData: CalendarDayData[] = calendarData.map((item: any) => ({
+                date: item.date || item.createdAt?.substring(0, 10) || '',
+                emotion: item.emotion || '중립'
             }));
             setCalendarDayData(dayData);
+            
+            if (calendarData.length > 0) {
+                const emotionCounts: Record<string, number> = {};
+                calendarData.forEach((item: any) => {
+                    const emotion = item.emotion || '중립';
+                    emotionCounts[emotion] = (emotionCounts[emotion] || 0) + 1;
+                });
+                // 6 개 감정 모두 포함하여 초기화
+                const graphDataArray = [
+                    { emotion: '기쁨', count: emotionCounts['기쁨'] || 0 },
+                    { emotion: '슬픔', count: emotionCounts['슬픔'] || 0 },
+                    { emotion: '분노', count: emotionCounts['분노'] || 0 },
+                    { emotion: '즐거움', count: emotionCounts['즐거움'] || 0 },
+                    { emotion: '중립', count: emotionCounts['중립'] || 0 },
+                    { emotion: '불안', count: emotionCounts['불안'] || 0 }
+                ];
+                setGraphData(graphDataArray);
+            } else {
+                // 데이터가 0 개일 경우 모든 감정을 0 으로 강제 초기화 (6 개 감정 모두)
+                setGraphData([
+                    { emotion: '기쁨', count: 0 },
+                    { emotion: '슬픔', count: 0 },
+                    { emotion: '분노', count: 0 },
+                    { emotion: '즐거움', count: 0 },
+                    { emotion: '중립', count: 0 },
+                    { emotion: '불안', count: 0 }
+                ]);
+            }
         } catch (error) {
             console.error('캘린더 데이터 로드 실패:', error);
         }
     };
     
-    // 추천 콘텐츠 표시
-    const showRecommendations = (emotion: string) => {
-        setCurrentView('recommendations');
-        const recs = RECOMMENDATIONS[emotion] || RECOMMENDATIONS['기쁨'];
-        setRecommendations(recs);
-    };
-    
-    // 감정 반응
-    const getEmotionReaction = (emotion: string): string => {
-        const reactionsList = EMOTION_REACTIONS[emotion] || EMOTION_REACTIONS['기쁨'];
-        return reactionsList[Math.floor(Math.random() * reactionsList.length)];
-    };
-    
-    // 봇 응답 생성 (더미)
-    const generateBotResponse = (message: string): string => {
+    // 봇 응답 생성
+    const generateBotResponse = (): string => {
         const responses = [
             '그렇군요! 😊',
             '재미있는 이야기네요! ✨',
@@ -651,10 +687,13 @@ function MainPage() {
     
     // 로그아웃
     const handleLogout = () => {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('tokenType');
-        localStorage.removeItem('expiresIn');
-        window.location.href = '/login';
+        if (window.confirm('로그아웃 하시겠습니까?')) {
+            window.alert('로그아웃 되었습니다.');
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('tokenType');
+            localStorage.removeItem('expiresIn');
+            window.location.href = '/login';
+        }
     };
     
     // 문의하기 제출
@@ -684,6 +723,94 @@ function MainPage() {
         setInquiries(prev => prev.filter((_, i) => i !== index));
     };
     
+    // 일기 삭제 함수 (삭제 API 연동 + 실시간 동기화)
+    const handleDeleteDiary = async (e: React.MouseEvent, diaryId: number, diaryDate: string) => {
+        e.stopPropagation(); // 아코디언 토글 이벤트 전파 방지
+        
+        if (!window.confirm('정말 이 일기를 삭제하시겠습니까?')) {
+            return;
+        }
+        
+        try {
+            const token = localStorage.getItem('accessToken');
+            if (!token) {
+                alert('로그인이 필요합니다.');
+                return;
+            }
+            
+            console.log(`🗑️ [DELETE Request] Deleting diary with id: ${diaryId}`);
+            
+            const response = await axios.delete(
+                `${API_BASE_URL}/api/diaries/${diaryId}`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+            
+            console.log('✅ [DELETE Response] Diary deleted successfully:', response.data);
+            
+            if (response.data.success) {
+                // 1. 전체 diaries 상태에서 해당 일기 제거
+                setDiaries(prev => prev.filter(d => d.id !== diaryId));
+                
+                // 2. 현재 보고 있는 월 기준으로 필터링된 데이터 재계산 - prev 사용으로 최신 상태 참조
+                const updatedDiaries = diaries.filter(d => d.id !== diaryId);
+                const currentMonthDiaries = filterDiariesByMonth(updatedDiaries, currentMonth);
+                const currentMonthStats = filterStatisticsByMonth(updatedDiaries, currentMonth);
+                
+                // 3. 캘린더 데이터 업데이트
+                const dayData: CalendarDayData[] = currentMonthDiaries.map((diary: any) => ({
+                    date: diary.date || '',
+                    emotion: diary.emotion || '중립'
+                }));
+                setCalendarDayData(dayData);
+                
+                // 4. 통계 데이터 업데이트
+                setStatistics(currentMonthStats);
+                
+                // 5. 그래프 데이터 업데이트 (6 개 감정 모두 포함)
+                const emotionCounts: Record<string, number> = {};
+                currentMonthDiaries.forEach((diary: any) => {
+                    const emotion = diary.emotion || '중립';
+                    emotionCounts[emotion] = (emotionCounts[emotion] || 0) + 1;
+                });
+                const graphDataArray = [
+                    { emotion: '기쁨', count: emotionCounts['기쁨'] || 0 },
+                    { emotion: '슬픔', count: emotionCounts['슬픔'] || 0 },
+                    { emotion: '분노', count: emotionCounts['분노'] || 0 },
+                    { emotion: '즐거움', count: emotionCounts['즐거움'] || 0 },
+                    { emotion: '중립', count: emotionCounts['중립'] || 0 },
+                    { emotion: '불안', count: emotionCounts['불안'] || 0 }
+                ];
+                setGraphData(graphDataArray);
+                
+                // 6. 선택된 일기 목록에서 삭제된 일기 제거
+                setSelectedDiaries(prev => {
+                    const filtered = prev.filter(d => d.id !== diaryId);
+                    // 삭제된 일기가 선택되어 있었다면, 첫 번째 일기를 자동으로 확장
+                    if (filtered.length > 0 && expandedDiaryIndex === prev.findIndex(d => d.id === diaryId)) {
+                        setExpandedDiaryIndex(0);
+                    } else if (filtered.length === 0) {
+                        setExpandedDiaryIndex(null);
+                    }
+                    return filtered;
+                });
+                
+                alert('일기가 삭제되었습니다! 🗑️');
+            } else {
+                alert('삭제 실패: ' + (response.data.message || '알 수 없는 오류'));
+            }
+            
+        } catch (error: any) {
+            console.error('일기 삭제 실패:', error);
+            const errorMsg = error.response?.data?.message || '일기 삭제에 실패했습니다.';
+            alert('삭제 실패: ' + errorMsg);
+        }
+    };
+    
     // 문의하기 팝업 토글
     const toggleInquiryPopup = () => {
         if (isInquiryOpen) {
@@ -702,6 +829,135 @@ function MainPage() {
     // 추천 콘텐츠 팝업 닫기
     const closeRecommendationPopup = () => {
         setIsRecommendationPopupOpen(false);
+    };
+    
+    // 콘텐츠 플레이어 열기
+    const openPlayer = (diary: DiaryEntry) => {
+        setCurrentPlayerDiary(diary);
+        setIsPlayerOpen(true);
+    };
+    
+    // 콘텐츠 플레이어 닫기
+    const closePlayer = () => {
+        setIsPlayerOpen(false);
+        setCurrentPlayerDiary(null);
+    };
+    
+    // 막대그래프 렌더링 함수 (수직 막대 스타일 - 얇고 깔끔하게)
+    const renderBarChart = (data: { emotion: string; count: number }[]) => {
+        const canvas = document.getElementById('emotionChart') as HTMLCanvasElement;
+        if (!canvas) return;
+        
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        
+        // 캔버스 크기 초기화
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width;
+        canvas.height = 340;
+        
+        const width = canvas.width;
+        const height = 340;
+        const padding = { top: 50, right: 40, bottom: 60, left: 60 };
+        const chartWidth = width - padding.left - padding.right;
+        const chartHeight = height - padding.top - padding.bottom;
+        
+        const emotionOrder = ['기쁨', '슬픔', '분노', '즐거움', '중립', '불안'];
+        const emotionColors: Record<string, string> = {
+            '기쁨': '#ff8a80',
+            '슬픔': '#80cbc4',
+            '분노': '#ffd180',
+            '즐거움': '#82b1ff',
+            '중립': '#a06129',
+            '불안': '#957dad'
+        };
+        
+        // 최대값 계산 (0 이면 1 로 설정)
+        const maxCount = Math.max(...data.map(d => d.count), 1);
+        // 얇은 수직 막대 (기존보다 훨씬 좁게)
+        const barWidth = 40;
+        
+        // 그래프 그리기
+        ctx.clearRect(0, 0, width, height);
+        
+        // Y 축 그리기
+        ctx.strokeStyle = '#ffc18c';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(padding.left, padding.top);
+        ctx.lineTo(padding.left, padding.top + chartHeight);
+        ctx.stroke();
+        
+        // X 축 그리기
+        ctx.beginPath();
+        ctx.moveTo(padding.left, padding.top + chartHeight);
+        ctx.lineTo(padding.left + chartWidth, padding.top + chartHeight);
+        ctx.stroke();
+        
+        // Y 축 눈금과 라벨
+        ctx.fillStyle = '#a06129';
+        ctx.font = '11px Arial';
+        ctx.textAlign = 'right';
+        const yTicks = 5;
+        for (let i = 0; i <= yTicks; i++) {
+            const value = Math.round((maxCount / yTicks) * i);
+            const y = padding.top + chartHeight - (i / yTicks) * chartHeight;
+            
+            // 눈금선
+            ctx.strokeStyle = '#ffc18c';
+            ctx.lineWidth = 0.5;
+            ctx.beginPath();
+            ctx.moveTo(padding.left - 5, y);
+            ctx.lineTo(padding.left, y);
+            ctx.stroke();
+            
+            // 숫자 라벨
+            ctx.fillStyle = '#a06129';
+            ctx.fillText(value.toString(), padding.left - 8, y + 4);
+        }
+        
+        // 막대 그리기 (수직 얇은 막대) - 6 개 감정용
+        const barSpacing = chartWidth / 6;
+        emotionOrder.forEach((emotion, index) => {
+            const count = data.find(d => d.emotion === emotion)?.count || 0;
+            const barHeight = maxCount > 0 ? (count / maxCount) * chartHeight : 0;
+            
+            // 막대 위치 (중앙 정렬)
+            const x = padding.left + index * barSpacing + (barSpacing - barWidth) / 2;
+            const y = padding.top + chartHeight - barHeight;
+            
+            // 데이터가 0 인 경우 막대 그리지 않고 바닥선만 표시
+            if (count === 0) {
+                // 감정 라벨만 표시
+                ctx.fillStyle = '#a06129';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(emotion, x + barWidth / 2, padding.top + chartHeight + 25);
+                return;
+            }
+            
+            // 막대 그리기 (단색, 얇은 수직 막대)
+            ctx.fillStyle = emotionColors[emotion] || '#b0bec5';
+            ctx.strokeStyle = emotionColors[emotion] || '#b0bec5';
+            ctx.lineWidth = 1;
+            
+            // 직사각형 (둥근 모서리 제거)
+            ctx.beginPath();
+            ctx.rect(x, y, barWidth, barHeight);
+            ctx.fill();
+            ctx.stroke();
+            
+            // 숫자 라벨 (막대 위)
+            ctx.fillStyle = '#5c3b1e';
+            ctx.font = 'bold 12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(count.toString(), x + barWidth / 2, y - 8);
+            
+            // 감정 라벨 (막대 아래)
+            ctx.fillStyle = '#a06129';
+            ctx.font = '12px Arial';
+            ctx.fillText(emotion, x + barWidth / 2, padding.top + chartHeight + 25);
+        });
     };
     
     return (
@@ -986,9 +1242,6 @@ function MainPage() {
                             <div ref={messagesEndRef} />
                         </div>
                         
-                        {/* 감정 선택 버튼 - 일기 모드일 때 무조건 숨김 (텍스트 입력만 허용) */}
-                        {/* emotion-selector 는 일기 모드에서 완전히 제거됨 */}
-                        
                         <div className="chat-input-container">
                             <input 
                                 type="text" 
@@ -1004,7 +1257,7 @@ function MainPage() {
                     </div>
                 )}
                 
-                {/* 캘린더 화면 - 실제 데이터 연동 */}
+                {/* 캘린더 화면 */}
                 {currentView === 'calendar' && (
                     <div className="calendar-container">
                         <div className="calendar-header">
@@ -1038,29 +1291,220 @@ function MainPage() {
                                     return <div key={i} className="calendar-day disabled"></div>;
                                 }
                                 
-                                // 현재 날짜 계산
                                 const currentYear = currentMonth.getFullYear();
                                 const currentMonthNum = currentMonth.getMonth() + 1;
                                 const dateKey = `${currentYear}-${String(currentMonthNum).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                                 
-                                // 해당 날짜의 감정 데이터 찾기
-                                const dayData = calendarDayData.find(d => d.date === dateKey);
-                                const emotionEmoji = dayData ? EMOTION_EMOJI[dayData.emotion] || '😊' : '';
-                                
-                                return (
-                                    <div key={i} className="calendar-day clickable" onClick={() => {
-                                        setViewingDate(dateKey);
-                                    }}>
-                                        <div className="day-number">{day}</div>
-                                        <div className="day-emoji">{emotionEmoji || '📝'}</div>
-                                    </div>
-                                );
+                                 // 해당 날짜의 모든 일기 찾기 (여러 일기 가능)
+                                 const diariesOnDay = diaries.filter((d: any) => d.date === dateKey);
+                                 
+                                 return (
+                                     <div key={i} className="calendar-day clickable" onClick={() => {
+                                         if (diariesOnDay.length > 0) {
+                                             // 해당 날짜의 모든 일기를 아코디언 모달에 표시
+                                             const diaryEntries: DiaryEntry[] = diariesOnDay.map((d: any) => ({
+                                                 id: d.id,
+                                                 text: d.content,
+                                                 emotion: d.emotion || '중립',
+                                                 date: d.date,
+                                                 aiComment: d.aiComment || '',
+                                                 sentimentScore: d.sentimentScore || 0
+                                             }));
+                                             setSelectedDiaries(diaryEntries);
+                                             setExpandedDiaryIndex(0); // 첫 번째 일기 자동 확장
+                                         } else {
+                                             // 일기가 없는 날짜 클릭 시 모달 표시
+                                             const dateText = `${currentYear}년 ${String(currentMonthNum).padStart(2, '0')}월 ${day}일`;
+                                             setEmptyDateModalText(`📅 ${dateText}\n\n이 날은 일기가 작성되지 않았습니다.\n\n오늘은 어떤 일이 있었나요? 일기를 작성해보세요!`);
+                                             setEmptyDateModalOpen(true);
+                                         }
+                                     }}>
+                                         <div className="day-number">{day}</div>
+                                         {diariesOnDay.length > 0 && <div className="day-emoji">📝</div>}
+                                     </div>
+                                 );
                             })}
                         </div>
+                        
+                        {/* 아코디언 모달 - 여러 일기 지원 */}
+                        {selectedDiaries.length > 0 && !isHealingLibraryOpen && (
+                            <div className="diary-detail-modal active">
+                                <div className="diary-detail-modal__content">
+                                    <button className="popup-close-btn" onClick={() => {
+                                        setSelectedDiaries([]);
+                                        setExpandedDiaryIndex(null);
+                                    }}>×</button>
+                                    <div className="diary-detail-modal__header">
+                                        <div className="diary-detail-modal__date">
+                                            📅 일기 목록
+                                        </div>
+                                    </div>
+                                    <div className="diary-detail-modal__body">
+                                        {selectedDiaries.map((diary, index) => (
+                                            <div key={index} className="diary-accordion-item">
+                                                <div 
+                                                    className="diary-accordion-header"
+                                                    style={{ cursor: 'pointer' }}
+                                                    onClick={() => setExpandedDiaryIndex(expandedDiaryIndex === index ? null : index)}
+                                                >
+                                                    <div className="diary-accordion-title">
+                                                        <span className="diary-accordion-time">
+                                                            {index + 1}. {diary.date}
+                                                        </span>
+                                                        <span className="diary-accordion-emotion">
+                                                            {diary.emotion === '기쁨' ? '😊' : diary.emotion === '슬픔' ? '😢' : diary.emotion === '분노' ? '😡' : diary.emotion === '즐거움' ? '🎉' : '😐'} {diary.emotion}
+                                                        </span>
+                                                        {diary.id !== undefined && diary.id !== null && (
+                                                            <button
+                                                                className="diary-delete-btn"
+                                                                onClick={(e) => handleDeleteDiary(e, diary.id!, diary.date)}
+                                                                style={{
+                                                                    background: 'rgba(255, 138, 128, 0.2)',
+                                                                    color: '#d63031',
+                                                                    border: 'none',
+                                                                    borderRadius: '50%',
+                                                                    width: '24px',
+                                                                    height: '24px',
+                                                                    fontSize: '16px',
+                                                                    fontWeight: '700',
+                                                                    cursor: 'pointer',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    padding: 0,
+                                                                    transition: 'all 0.2s',
+                                                                    marginLeft: '8px'
+                                                                }}
+                                                                onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255, 138, 128, 0.4)'}
+                                                                onMouseOut={(e) => e.currentTarget.style.background = 'rgba(255, 138, 128, 0.2)'}
+                                                            >
+                                                                ×
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    <span className="diary-accordion-icon">
+                                                        {expandedDiaryIndex === index ? '▲' : '▼'}
+                                                    </span>
+                                                </div>
+                                                {expandedDiaryIndex === index && (
+                                                    <div className="diary-accordion-content" style={{ display: 'block', padding: '10px' }}>
+                                                        <div className="diary-detail-modal__section">
+                                                            <div className="diary-detail-modal__section-title">📝 작성한 일기 내용</div>
+                                                            <div className="diary-detail-modal__section-content">
+                                                                {diary.text}
+                                                            </div>
+                                                        </div>
+                                                        <div className="diary-detail-modal__section">
+                                                            <div className="diary-detail-modal__section-title">💭 AI 분석 결과</div>
+                                                            <div className="diary-detail-modal__section-content">
+                                                                <div className="diary-detail-modal__ai-comment">
+                                                                    {diary.aiComment || '감정을 분석했습니다.'}
+                                                                </div>
+                                                                <div className="diary-detail-modal__sentiment-score">
+                                                                    감성 점수: {(diary.sentimentScore || 0).toFixed(2)}점
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="diary-detail-modal__section">
+                                                            <div className="diary-detail-modal__section-title">🎁 추천 콘텐츠</div>
+                                                            <div className="diary-detail-modal__section-content">
+                                                                <button 
+                                                                    className="recommend-button" 
+                                                                    onClick={() => {
+                                                                        setIsHealingLibraryOpen(true);
+                                                                    }}
+                                                                >
+                                                                    🎵 오디오 클립: 마음 안정 유도하기
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* 나의 치유 보관함 뷰 */}
+                        {isHealingLibraryOpen && (
+                            <div className="diary-detail-modal active">
+                                <div className="diary-detail-modal__content">
+                                    <button className="popup-close-btn" onClick={() => setIsHealingLibraryOpen(false)}>×</button>
+                                    <div className="diary-detail-modal__header">
+                                        <div className="diary-detail-modal__date">
+                                            🌿 나의 치유 보관함
+                                        </div>
+                                    </div>
+                                    <div className="diary-detail-modal__body">
+                                        <button className="rec-back" onClick={() => setIsHealingLibraryOpen(false)} style={{marginBottom: '20px'}}>
+                                            📅 일기 목록으로 돌아가기
+                                        </button>
+                                        
+                                        <div className="rec-columns">
+                                            <div className="rec-col">
+                                                <div className="rec-col-title">🎵 잔잔한 위로 플레이리스트</div>
+                                                <div className="rec-grid" style={{display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px'}}>
+                                                    <div className="rec-card">
+                                                        <span className="rec-tag">음악</span>
+                                                        <h3>잔잔한 위로</h3>
+                                                        <p>흐르는 눈물을 닦아주며 / 당신의 곁에 있을게요</p>
+                                                    </div>
+                                                    <div className="rec-card">
+                                                        <span className="rec-tag">음악</span>
+                                                        <h3>차분한 하루</h3>
+                                                        <p>조용한 시간을 보내며 / 마음을 정리해요</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="rec-col">
+                                                <div className="rec-col-title">✨ 오늘의 긍정 한 줄</div>
+                                                <div className="rec-grid" style={{display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px'}}>
+                                                    <div className="rec-card">
+                                                        <span className="rec-tag">글귀</span>
+                                                        <h3>오늘의 위로</h3>
+                                                        <p>당신의 가치는 흔들리지 않아요 / 오늘도 충분히 잘했어요</p>
+                                                    </div>
+                                                    <div className="rec-card">
+                                                        <span className="rec-tag">글귀</span>
+                                                        <h3>평온함</h3>
+                                                        <p>조용한 물결처럼 / 흐르는 시간을 느껴보세요</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* 일기가 없는 날짜 모달 */}
+                        {emptyDateModalOpen && (
+                            <div className="empty-date-modal active">
+                                <div className="empty-date-modal__content">
+                                    <button className="popup-close-btn" onClick={() => setEmptyDateModalOpen(false)}>×</button>
+                                    <div className="empty-date-modal__body">
+                                        <div className="empty-date-modal__icon">📅</div>
+                                        <div className="empty-date-modal__text" dangerouslySetInnerHTML={{ __html: emptyDateModalText.replace(/\n/g, '<br />') }} />
+                                        <button 
+                                            className="write-diary-btn" 
+                                            onClick={() => {
+                                                setEmptyDateModalOpen(false);
+                                                setCurrentView('chat');
+                                                startDiaryMode();
+                                            }}
+                                        >
+                                            일기 쓰기
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
                 
-                {/* 그래프 화면 - 실제 통계 데이터 연동 */}
+                {/* 그래프 화면 */}
                 {currentView === 'graph' && (
                     <div className="graph-container">
                         <div className="graph-header">
@@ -1069,6 +1513,7 @@ function MainPage() {
                                     const m = new Date(graphMonth);
                                     m.setMonth(m.getMonth() - 1);
                                     setGraphMonth(m);
+                                    loadStatistics(m);
                                 }}>◀</button>
                                 <div className="month-label">
                                     {graphMonth.getFullYear()}년 {String(graphMonth.getMonth() + 1).padStart(2, '0')}월
@@ -1077,6 +1522,7 @@ function MainPage() {
                                     const m = new Date(graphMonth);
                                     m.setMonth(m.getMonth() + 1);
                                     setGraphMonth(m);
+                                    loadStatistics(m);
                                 }}>▶</button>
                             </div>
                             <div>
@@ -1084,14 +1530,23 @@ function MainPage() {
                                 <div className="graph-subtitle">실제 일기 데이터 기반</div>
                             </div>
                         </div>
-                        <canvas id="emotionChart" width="860" height="340" style={{width:'100%',maxWidth:'860px',border:'1px solid rgba(255,188,122,0.5)',borderRadius:'12px',background:'#fff9ef'}}></canvas>
+                        
+                        <div style={{width: '100%', maxWidth: '860px', height: '340px', margin: '0 auto', position: 'relative'}}>
+                            <canvas id="emotionChart" width="860" height="340" style={{width:'100%',maxWidth:'860px',border:'1px solid rgba(255,188,122,0.5)',borderRadius:'12px',background:'#fff9ef'}}></canvas>
+                            <div style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none'}}>
+                                {null}
+                            </div>
+                        </div>
+                        
                         <div className="graph-legend">
                             <div className="legend-item"><span className="legend-color" style={{background:'#ff8a80'}}></span>기쁨</div>
                             <div className="legend-item"><span className="legend-color" style={{background:'#80cbc4'}}></span>슬픔</div>
                             <div className="legend-item"><span className="legend-color" style={{background:'#ffd180'}}></span>분노</div>
                             <div className="legend-item"><span className="legend-color" style={{background:'#82b1ff'}}></span>즐거움</div>
+                            <div className="legend-item"><span className="legend-color" style={{background:'#a06129'}}></span>중립</div>
+                            <div className="legend-item"><span className="legend-color" style={{background:'#957dad'}}></span>불안</div>
                         </div>
-                        {/* 통계 정보 표시 */}
+                        
                         {statistics && (
                             <div className="statistics-info">
                                 <div className="stat-item">
@@ -1146,7 +1601,7 @@ function MainPage() {
                     </div>
                 )}
                 
-                {/* 내 정보 화면 (더미) */}
+                {/* 내 정보 화면 */}
                 {currentView === 'myInfo' && (
                     <div className="my-info-container">
                         <div className="my-info-header">
@@ -1202,6 +1657,49 @@ function MainPage() {
                 )}
                 
             </main>
+            
+            {/* 콘텐츠 플레이어 뷰 */}
+            {isPlayerOpen && currentPlayerDiary && (
+                <div className="content-player-overlay active">
+                    <div className="content-player">
+                        <div className="content-player__header">
+                            <button className="content-player__back-btn" onClick={closePlayer}>
+                                ←
+                            </button>
+                            <div className="content-player__title">
+                                🎵 오디오 클립: 마음 안정 유도하기
+                            </div>
+                        </div>
+                        
+                        <div className="content-player__cover">
+                            <div className="content-player__cover-icon">🎧</div>
+                        </div>
+                        
+                        <div className="content-player__seek-bar">
+                            <div className="content-player__seek-progress"></div>
+                        </div>
+                        
+                        <div className="content-player__time">
+                            <span>01:23</span>
+                            <span>04:30</span>
+                        </div>
+                        
+                        <div className="content-player__controls">
+                            <button className="content-player__control-btn">⏮</button>
+                            <button className="content-player__control-btn play">▶</button>
+                            <button className="content-player__control-btn">⏭</button>
+                        </div>
+                        
+                        <div className="content-player__description">
+                            <div className="content-player__description-title">📝 추천 이유</div>
+                            <div>
+                                {currentPlayerDiary.emotion}한 감정을 가지고 계신 것 같아요. 
+                                이 오디오 클립은 당신의 감정을 안정시키고 마음을 편안하게 하는 데 도움이 될 거예요.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
