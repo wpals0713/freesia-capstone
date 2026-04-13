@@ -180,7 +180,8 @@ body {
 
 .note-badge.badge-hidden {
     opacity: 0;
-    transform: scale(0.4);
+    pointer-events: none;
+    transform: scale(0);
 }
 
 .settings-icon-inner {

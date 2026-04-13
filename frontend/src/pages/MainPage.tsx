@@ -119,6 +119,46 @@ function MainPage() {
     const [isWelcomeOpen, setIsWelcomeOpen] = useState(false);
     const [visibleWelcomeIndex, setVisibleWelcomeIndex] = useState(-1);
     
+    // 로그인 상태 (로그인 성공 시 true 로 설정)
+    const [isLoggedIn, setIsLoggedIn] = useState(false);
+    
+    // 사용자 ID (로그인 시 설정)
+    const [userId, setUserId] = useState<string | null>(null);
+    
+    // 메시지 읽음 상태 (useState Lazy Initializer 사용 - 깜빡임 방지)
+    // 태어날 때 바로 localStorage 체크 (1 차 렌더링부터 완벽함!)
+    const [isMessageRead, setIsMessageRead] = useState(() => {
+        const saved = localStorage.getItem('welcomeMessageRead');
+        return saved === 'true'; // 'true' 일 때만 true, 그 외는 false
+    });
+    
+    // localStorage 에서 메시지 읽음 상태 확인하는 함수 (로그인 시 사용자 ID 기반 키 사용)
+    const checkMessageReadStatus = () => {
+        if (!userId) return;
+        const key = `welcomeMessageRead_${userId}`;
+        const saved = localStorage.getItem(key);
+        setIsMessageRead(saved === 'true');
+    };
+    
+    // 로그인 상태 변경 시 localStorage 다시 체크 (새로고침 및 로그인 대응)
+    useEffect(() => {
+        if (isLoggedIn && userId) {
+            checkMessageReadStatus();
+        }
+    }, [isLoggedIn, userId]);
+    
+    // 컴포넌트 마운트 시 accessToken 확인하여 로그인 상태 설정
+    useEffect(() => {
+        const token = localStorage.getItem('accessToken');
+        if (token) {
+            setIsLoggedIn(true);
+            // 사용자 ID 는 accessToken 에서 추출하거나, 임시로 고정값 사용
+            // 실제 구현 시에는 백엔드에서 사용자 정보를 가져와야 함
+            setUserId('user'); // 임시 값 - 실제 사용자 ID 로 교체 필요
+            checkMessageReadStatus();
+        }
+    }, []);
+    
     // 채팅 관련 상태
     const [messages, setMessages] = useState<Message[]>([
         { id: 0, text: '오늘 하루의 이야기를 들려주세요 🌼', sender: 'bot' }
@@ -692,6 +732,12 @@ function MainPage() {
             localStorage.removeItem('accessToken');
             localStorage.removeItem('tokenType');
             localStorage.removeItem('expiresIn');
+            // 로그아웃 시 웰컴 메시지 읽음 상태도 초기화
+            if (userId) {
+                localStorage.removeItem(`welcomeMessageRead_${userId}`);
+            } else {
+                localStorage.removeItem('welcomeMessageRead');
+            }
             window.location.href = '/login';
         }
     };
@@ -1191,9 +1237,16 @@ function MainPage() {
                                 <button className="note-icon" title="프리지아 웰컴 메시지" onClick={() => {
                                     setIsWelcomeOpen(true);
                                     showWelcomeMessage(0);
+                                    setIsMessageRead(true);
+                                    // 클릭 시에만 localStorage 에 'true' 저장 (사용자 ID 기반 키 사용)
+                                    if (userId) {
+                                        localStorage.setItem(`welcomeMessageRead_${userId}`, 'true');
+                                    } else {
+                                        localStorage.setItem('welcomeMessageRead', 'true');
+                                    }
                                 }}>
                                     ✉️
-                                    <span className="note-badge badge-hidden" aria-hidden="true"></span>
+                                    <span className={`note-badge ${isMessageRead ? 'badge-hidden' : ''}`} aria-hidden="true"></span>
                                 </button>
                                 <div className="chat-toggle-container" title="모드 전환">
                                     <span id="toggleLabel" style={{fontSize:'14px',fontWeight:600, color: '#8b3f00'}}>
