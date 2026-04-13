@@ -1,7 +1,6 @@
 package com.freesia.backend.diary.dto;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -16,6 +15,6 @@ public class DiaryRequestDTO {
 
     private String emoji;
 
-    @NotNull(message = "일기 날짜를 입력해 주세요.")
+    // 선택적 필드 - 프론트엔드에서 전송하지 않으면 백엔드가 서버 시간으로 자동 설정
     private LocalDate date;
 }

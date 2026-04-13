@@ -1,5 +1,6 @@
 package com.freesia.backend.diary.repository;
 
+import com.freesia.backend.diary.dto.DiaryCalendarResponse;
 import com.freesia.backend.diary.entity.Diary;
 import com.freesia.backend.diary.entity.DiaryStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -20,6 +21,15 @@ public interface DiaryRepository extends JpaRepository<Diary, Long> {
     /** 특정 회원의 특정 년/월 활성 일기 조회 */
     @Query("SELECT d FROM Diary d WHERE d.member.id = :memberId AND d.status = :status AND YEAR(d.date) = :year AND MONTH(d.date) = :month")
     List<Diary> findByMemberIdAndStatusAndYearMonth(
+            @Param("memberId") Long memberId,
+            @Param("status") DiaryStatus status,
+            @Param("year") int year,
+            @Param("month") int month);
+
+    /** 특정 회원의 특정 년/월 활성 일기 조회 (캘린더용 DTO) */
+    @Query("SELECT new com.freesia.backend.diary.dto.DiaryCalendarResponse(d.id, d.createdAt, d.emotion) " +
+            "FROM Diary d WHERE d.member.id = :memberId AND d.status = :status AND YEAR(d.date) = :year AND MONTH(d.date) = :month")
+    List<DiaryCalendarResponse> findCalendarDiariesByMemberIdAndYearMonth(
             @Param("memberId") Long memberId,
             @Param("status") DiaryStatus status,
             @Param("year") int year,
