@@ -1738,6 +1738,8 @@ input:checked + .slider:before {
     border-radius: 16px;
     padding: 16px;
     box-shadow: inset 0 0 12px rgba(255, 222, 186, 0.4);
+    /* 모든 섹션은 동일한 flex-shrink 으로 통합 스크롤 처리 */
+    flex-shrink: 0;
 }
 
 .diary-detail-modal__section-title {
@@ -2159,9 +2161,225 @@ input:checked + .slider:before {
     border-radius: 12px;
 }
 
-.content-player__description-title {
+/* ====================
+   추천 콘텐츠 4 종 (음악, 책, 영화, 활동) 스타일
+   ==================== */
+
+/* 로딩 스피너 */
+.recommendation-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 20px;
+}
+
+.loading-spinner {
+    width: 32px;
+    height: 32px;
+    border: 4px solid rgba(255, 193, 121, 0.3);
+    border-top-color: #ffc18c;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.no-recommendation {
+    text-align: center;
+    color: #a06129;
     font-size: 14px;
+    padding: 20px;
+}
+
+/* 추천 콘텐츠 그리드 - 통합 스크롤 컨테이너에서 스크롤 처리 */
+.recommendation-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+    /* max-height 와 overflow-y 제거 - 통합 컨테이너에서 스크롤 처리 */
+}
+
+/* 추천 카드 기본 스타일 */
+.recommendation-card {
+    border-radius: 16px;
+    padding: 16px;
+    text-decoration: none;
+    color: inherit;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    border: 2px solid transparent;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.recommendation-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+/* 카테고리별 배경색 */
+.recommendation-card.music {
+    background-color: #fee2e2;
+    border-color: #fca5a5;
+}
+
+.recommendation-card.movie {
+    background-color: #ebe2ff;
+    border-color: #d8b4fe;
+}
+
+.recommendation-card.book {
+    background-color: #dbeafe;
+    border-color: #93c5fd;
+}
+
+.recommendation-card.activity {
+    background-color: #d1fae5;
+    border-color: #6ee7b7;
+}
+
+/* 카드 헤더 */
+.recommendation-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.recommendation-category-icon {
+    font-size: 20px;
+}
+
+.recommendation-category {
+    font-size: 12px;
     font-weight: 700;
     color: #a06129;
-    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* 카드 제목 */
+.recommendation-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #8b3f00;
+    margin: 0;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* 카드 설명 */
+.recommendation-description {
+    font-size: 13px;
+    color: #6a360a;
+    line-height: 1.6;
+    margin: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    flex: 1;
+}
+
+/* 카드 이미지 */
+.recommendation-image {
+    width: 100%;
+    height: 120px;
+    object-fit: cover;
+    border-radius: 8px;
+    margin-top: 8px;
+}
+
+/* ====================
+   일기 상세 모달 통합 스크롤 레이아웃
+   ==================== */
+
+/* 모달 콘텐츠 컨테이너 - 전체 높이 확보 */
+.diary-detail-modal__content {
+    width: min(700px, 95vw);
+    max-height: 90vh;
+    overflow-y: auto !important;
+    padding-right: 12px;
+    /* 커스텀 스크롤바 적용을 위한 기본 설정 */
+}
+
+/* 커스텀 스크롤바 - 연보라 톤 */
+.diary-detail-modal__content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.diary-detail-modal__content::-webkit-scrollbar-track {
+    background: rgba(255, 239, 210, 0.5);
+    border-radius: 4px;
+}
+
+.diary-detail-modal__content::-webkit-scrollbar-thumb {
+    background: #e9d5ff;
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+
+.diary-detail-modal__content::-webkit-scrollbar-thumb:hover {
+    background: #d8b4fe;
+    border-color: transparent;
+}
+
+/* Firefox 스크롤바 */
+.diary-detail-modal__content {
+    scrollbar-width: thin;
+    scrollbar-color: #e9d5ff rgba(255, 239, 210, 0.5);
+}
+
+/* 통합 스크롤 컨테이너 - 모든 콘텐츠 포함 */
+.diary-detail-modal__body {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding-bottom: 30px;
+    /* max-height 제거 - 부모 컨테이너에서 처리 */
+    overflow-y: visible !important;
+}
+
+/* 문의하기 팝업 스크롤 */
+.inquiry-popup__content {
+    max-height: 85vh;
+    overflow-y: auto;
+}
+
+.inquiry-history-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+/* 내 정보 화면 스크롤 */
+.my-info-container {
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+/* 콘텐츠 플레이어 스크롤 */
+.content-player {
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+/* 캘린더 아코디언 스크롤 - 통합 스크롤 컨테이너 사용 */
+.diary-detail-modal__body {
+    /* max-height 제거 - 통합 스크롤 컨테이너에서 처리 */
+    overflow-y: visible !important;
+}
+
+/* 추천 콘텐츠 섹션 스크롤 제거 - 통합 스크롤 컨테이너에서 처리 */
+.diary-detail-modal__section-content {
+    max-height: none;
+    overflow-y: visible !important;
 }

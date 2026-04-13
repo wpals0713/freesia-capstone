@@ -43,6 +43,31 @@ public class RecommendationController {
     }
 
     /**
+     * [실시간 크롤링] 유튜브 API 를 통해 음악 데이터를 수집합니다.
+     * URL 호출 시 자동으로 유튜브 API 를 통해 데이터를 수집하고 저장합니다.
+     * 예: http://localhost:8080/api/recommendations/crawl/music
+     *
+     * @return 수집 결과 메시지
+     */
+    @GetMapping("/crawl/music")
+    public ResponseEntity<Map<String, String>> crawlMusic() {
+        log.info("=== 유튜브 API 기반 음악 데이터 크롤링 시작 ===");
+        try {
+            musicCrawlingService.collectYouTubeRecommendations();
+            Map<String, String> response = new HashMap<>();
+            response.put("status", "success");
+            response.put("message", "유튜브 API 를 통한 음악 데이터 수집이 완료되었습니다.");
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("유튜브 API 음악 데이터 수집 실패: {}", e.getMessage(), e);
+            Map<String, String> response = new HashMap<>();
+            response.put("status", "error");
+            response.put("message", "유튜브 API 음악 데이터 수집 중 오류가 발생했습니다: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
+
+    /**
      * [테스트용] 음악 데이터를 수집합니다.
      * 개발 환경에서 브라우저 주소창으로 직접 접근하여 테스트할 수 있습니다.
      * 예: http://localhost:8080/api/recommendations/test/crawl-music

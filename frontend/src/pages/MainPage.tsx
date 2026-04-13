@@ -2,6 +2,16 @@ import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import './MainPage.css';
 
+// 추천 데이터 인터페이스
+export interface RecommendationResponse {
+  id: number;
+  category: string;
+  title: string;
+  description: string;
+  imageUrl: string;
+  contentUrl: string;
+}
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
 interface Message {
@@ -15,10 +25,15 @@ interface Message {
 interface DiaryEntry {
     id?: number;
     text: string;
+    content?: string;
     emotion: string;
     date: string;
     aiComment?: string;
     sentimentScore?: number;
+    tag?: string;
+    title?: string;
+    desc?: string;
+    url?: string;
 }
 
 interface Inquiry {
@@ -111,7 +126,53 @@ const EMPATHY_EMOJI: Record<string, string> = {
     '불안': '😨'
 };
 
+// 카테고리별 스타일 설정
+const getCategoryConfig = (category: string) => {
+    const config: Record<string, { icon: string; backgroundColor: string; borderColor: string }> = {
+        MUSIC: { icon: '🎵', backgroundColor: '#fee2e2', borderColor: '#fca5a5' },
+        MOVIE: { icon: '🎬', backgroundColor: '#ebe2ff', borderColor: '#d8b4fe' },
+        BOOK: { icon: '📚', backgroundColor: '#dbeafe', borderColor: '#93c5fd' },
+        ACTIVITY: { icon: '🏃', backgroundColor: '#d1fae5', borderColor: '#6ee7b7' }
+    };
+    return config[category] || { icon: '📌', backgroundColor: '#f3f4f6', borderColor: '#d1d5db' };
+};
+
 function MainPage() {
+    // 추천 데이터 로드 함수 (캐시 파괴를 위해 랜덤 파라미터 추가)
+    const loadRecommendations = async (emotion: string) => {
+        try {
+            setIsRecommendationLoading(true);
+            // 브라우저 캐시를 파괴하기 위해 랜덤 파라미터 추가
+            const response = await axios.get(`${API_BASE_URL}/api/recommendations`, {
+                params: { emotion, v: Math.random() },
+                headers: {
+                    Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            setRecommendationData(response.data || []);
+        } catch (error) {
+            console.error('추천 데이터 로드 실패:', error);
+            setRecommendationData([]);
+        } finally {
+            setIsRecommendationLoading(false);
+        }
+    };
+    
+    // ESC 키로 모달 닫기
+    useEffect(() => {
+        const handleEscKey = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setSelectedDiaries([]);
+                setExpandedDiaryIndex(null);
+            }
+        };
+        
+        document.addEventListener('keydown', handleEscKey);
+        return () => {
+            document.removeEventListener('keydown', handleEscKey);
+        };
+    }, []);
     // 채팅/일기 토글 상태
     const [chatMode, setChatMode] = useState<'chat' | 'diary'>('chat');
     
@@ -149,21 +210,25 @@ function MainPage() {
     const [graphData, setGraphData] = useState<{ emotion: string; count: number }[]>([]);
     
     // UI 연동: 캘린더 상세 데이터용 일기 목록
-    const [diaries, setDiaries] = useState<any[]>([]);
+    const [diaries, setDiaries] = useState<DiaryEntry[]>([]);
     
     // 추천 상태 (추천 화면에서 사용)
-    const [recommendations] = useState<any[]>([]);
+    const [recommendations, setRecommendations] = useState<DiaryEntry[]>([]);
     
     // 추천 콘텐츠 팝업 상태
     const [isRecommendationPopupOpen, setIsRecommendationPopupOpen] = useState(false);
     const [popupEmotion, setPopupEmotion] = useState<string>('기쁨');
     
+    // 추천 데이터 상태
+    const [recommendationData, setRecommendationData] = useState<RecommendationResponse[]>([]);
+    const [isRecommendationLoading, setIsRecommendationLoading] = useState(false);
+    
+    // 치유 보관함 상태 (삭제 예정 - 4 종 추천 콘텐츠로 통합)
+    const [isHealingLibraryOpen, setIsHealingLibraryOpen] = useState(false);
+    
     // 콘텐츠 플레이어 상태
     const [isPlayerOpen, setIsPlayerOpen] = useState(false);
     const [currentPlayerDiary, setCurrentPlayerDiary] = useState<DiaryEntry | null>(null);
-    
-    // 치유 보관함 상태
-    const [isHealingLibraryOpen, setIsHealingLibraryOpen] = useState(false);
     
     // 문의하기 상태
     const [isInquiryOpen, setIsInquiryOpen] = useState(false);
@@ -467,8 +532,9 @@ function MainPage() {
                 setTyping(false);
                 
                 // 1. 새 일기를 전역 diaries 상태에 즉시 추가 (실시간 동기화)
-                const newDiaryEntry = {
+                const newDiaryEntry: DiaryEntry = {
                     id: diaryResponse.data.data.id,
+                    text: message,
                     content: message,
                     date: todayKey,
                     emotion: backendEmotion,
@@ -725,6 +791,8 @@ function MainPage() {
     
     // 일기 삭제 함수 (삭제 API 연동 + 실시간 동기화)
     const handleDeleteDiary = async (e: React.MouseEvent, diaryId: number, diaryDate: string) => {
+        e.preventDefault();
+        e.stopPropagation();
         e.stopPropagation(); // 아코디언 토글 이벤트 전파 방지
         
         if (!window.confirm('정말 이 일기를 삭제하시겠습니까?')) {
@@ -820,16 +888,34 @@ function MainPage() {
         }
     };
     
-    // 추천 콘텐츠 팝업 열기
+    // 추천 콘텐츠 팝업 열기 (ESC 키 처리를 위해 emotion 전달)
     const openRecommendationPopup = (emotion: string) => {
         setPopupEmotion(emotion);
         setIsRecommendationPopupOpen(true);
+        // 팝업 열리자마자 추천 데이터 로드
+        loadRecommendations(emotion);
     };
     
     // 추천 콘텐츠 팝업 닫기
     const closeRecommendationPopup = () => {
         setIsRecommendationPopupOpen(false);
     };
+    
+    // ESC 키로 추천 팝업 닫기
+    useEffect(() => {
+        const handleEscKey = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setSelectedDiaries([]);
+                setExpandedDiaryIndex(null);
+                setIsRecommendationPopupOpen(false);
+            }
+        };
+        
+        document.addEventListener('keydown', handleEscKey);
+        return () => {
+            document.removeEventListener('keydown', handleEscKey);
+        };
+    }, []);
     
     // 콘텐츠 플레이어 열기
     const openPlayer = (diary: DiaryEntry) => {
@@ -1041,41 +1127,75 @@ function MainPage() {
                 </div>
             )}
             
-            {/* 추천 콘텐츠 팝업 */}
+            {/* 추천 콘텐츠 팝업 - 4 종 크롤링 데이터 연동 */}
             {isRecommendationPopupOpen && (
-                <div className="recommendation-popup active">
-                    <div className="recommendation-popup__content">
+                <div 
+                    className="recommendation-popup active"
+                    onClick={(e) => {
+                        // 배경 (오버레이) 클릭 시 모달 닫기
+                        closeRecommendationPopup();
+                    }}
+                >
+                    <div 
+                        className="recommendation-popup__content"
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         <button className="popup-close-btn" onClick={closeRecommendationPopup}>×</button>
                         <div className="recommendation-popup__title">
-                            🎵 AI 가 추천하는 콘텐츠 - {popupEmotion}
+                            🎁 AI 가 추천하는 맞춤 콘텐츠 - {popupEmotion}
                         </div>
                         
                         <div className="recommendation-popup__body">
-                            <div className="recommendation-popup__section">
-                                <div className="recommendation-popup__section-icon">🎵</div>
-                                <div className="recommendation-popup__section-content">
-                                    <div className="recommendation-popup__section-title">
-                                        {RECOMMENDATION_POPUP_DATA[popupEmotion]?.song.title || '추천 노래'}
-                                    </div>
-                                    <div className="recommendation-popup__lyrics">
-                                        {RECOMMENDATION_POPUP_DATA[popupEmotion]?.song.lyrics || ''}
-                                    </div>
+                            {isRecommendationLoading ? (
+                                <div className="recommendation-loading">
+                                    <div className="loading-spinner"></div>
+                                    <p>팀장님을 위한 맞춤 힐링 콘텐츠를 찾는 중이에요 ✨</p>
                                 </div>
-                            </div>
-                            
-                            <div className="recommendation-popup__divider"></div>
-                            
-                            <div className="recommendation-popup__section">
-                                <div className="recommendation-popup__section-icon">✍️</div>
-                                <div className="recommendation-popup__section-content">
-                                    <div className="recommendation-popup__section-title">
-                                        {RECOMMENDATION_POPUP_DATA[popupEmotion]?.poem.title || '추천 글귀'}
-                                    </div>
-                                    <div className="recommendation-popup__lyrics">
-                                        {RECOMMENDATION_POPUP_DATA[popupEmotion]?.poem.lyrics || ''}
-                                    </div>
+                            ) : recommendationData.length === 0 ? (
+                                <p className="no-recommendation">어제 수집한 맞춤 콘텐츠를 불러올 수 없어요</p>
+                            ) : (
+                                <div className="recommendation-grid">
+                                    {recommendationData.map((rec) => {
+                                        const categoryConfig = getCategoryConfig(rec.category);
+                                        return (
+                                            <a
+                                                key={rec.id}
+                                                href={rec.contentUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className={`recommendation-card ${rec.category.toLowerCase()}`}
+                                                style={{
+                                                    backgroundColor: categoryConfig.backgroundColor,
+                                                    borderColor: categoryConfig.borderColor
+                                                }}
+                                                onClick={(e) => {
+                                                    if (rec.contentUrl) {
+                                                        e.preventDefault();
+                                                        window.open(rec.contentUrl, '_blank');
+                                                    }
+                                                }}
+                                            >
+                                                <div className="recommendation-card-header">
+                                                    <span className="recommendation-category-icon">{categoryConfig.icon}</span>
+                                                    <span className="recommendation-category">{rec.category}</span>
+                                                </div>
+                                                <h4 className="recommendation-title">{rec.title}</h4>
+                                                <p className="recommendation-description">{rec.description}</p>
+                                                {rec.imageUrl && (
+                                                    <img 
+                                                        src={rec.imageUrl} 
+                                                        alt={rec.title} 
+                                                        className="recommendation-image"
+                                                        onError={(e) => {
+                                                            (e.target as HTMLImageElement).style.display = 'none';
+                                                        }}
+                                                    />
+                                                )}
+                                            </a>
+                                        );
+                                    })}
                                 </div>
-                            </div>
+                            )}
                         </div>
                         
                         <button className="recommendation-popup__close-btn" onClick={closeRecommendationPopup}>
@@ -1312,6 +1432,11 @@ function MainPage() {
                                              }));
                                              setSelectedDiaries(diaryEntries);
                                              setExpandedDiaryIndex(0); // 첫 번째 일기 자동 확장
+                                             
+                                             // 모달 오픈 시 자동 셔플 - 첫 번째 일기의 감정으로 추천 데이터 로드
+                                             if (diaryEntries.length > 0 && diaryEntries[0].emotion) {
+                                                 loadRecommendations(diaryEntries[0].emotion);
+                                             }
                                          } else {
                                              // 일기가 없는 날짜 클릭 시 모달 표시
                                              const dateText = `${currentYear}년 ${String(currentMonthNum).padStart(2, '0')}월 ${day}일`;
@@ -1326,10 +1451,21 @@ function MainPage() {
                             })}
                         </div>
                         
-                        {/* 아코디언 모달 - 여러 일기 지원 */}
+                        {/* 아코디언 모달 - 여러 일기 지원 (배경 클릭 시 닫기, ESC 키 지원) */}
                         {selectedDiaries.length > 0 && !isHealingLibraryOpen && (
-                            <div className="diary-detail-modal active">
-                                <div className="diary-detail-modal__content">
+                            <div 
+                                className="diary-detail-modal active"
+                                onClick={(e) => {
+                                    // 배경 (오버레이) 클릭 시 모달 닫기
+                                    // 콘텐츠 영역 클릭 시에는 전파되지 않음 (stopPropagation)
+                                    setSelectedDiaries([]);
+                                    setExpandedDiaryIndex(null);
+                                }}
+                            >
+                                <div 
+                                    className="diary-detail-modal__content"
+                                    onClick={(e) => e.stopPropagation()}
+                                >
                                     <button className="popup-close-btn" onClick={() => {
                                         setSelectedDiaries([]);
                                         setExpandedDiaryIndex(null);
@@ -1345,7 +1481,13 @@ function MainPage() {
                                                 <div 
                                                     className="diary-accordion-header"
                                                     style={{ cursor: 'pointer' }}
-                                                    onClick={() => setExpandedDiaryIndex(expandedDiaryIndex === index ? null : index)}
+                                                    onClick={() => {
+                                                        setExpandedDiaryIndex(expandedDiaryIndex === index ? null : index);
+                                                        // 일기 확장 시 추천 데이터 로드
+                                                        if (expandedDiaryIndex !== index && diary.emotion) {
+                                                            loadRecommendations(diary.emotion);
+                                                        }
+                                                    }}
                                                 >
                                                     <div className="diary-accordion-title">
                                                         <span className="diary-accordion-time">
@@ -1406,16 +1548,58 @@ function MainPage() {
                                                             </div>
                                                         </div>
                                                         <div className="diary-detail-modal__section">
-                                                            <div className="diary-detail-modal__section-title">🎁 추천 콘텐츠</div>
+                                                            <div className="diary-detail-modal__section-title">🎁 추천 콘텐츠 (음악, 책, 영화, 활동)</div>
                                                             <div className="diary-detail-modal__section-content">
-                                                                <button 
-                                                                    className="recommend-button" 
-                                                                    onClick={() => {
-                                                                        setIsHealingLibraryOpen(true);
-                                                                    }}
-                                                                >
-                                                                    🎵 오디오 클립: 마음 안정 유도하기
-                                                                </button>
+                                                                {isRecommendationLoading ? (
+                                                                    <div className="recommendation-loading">
+                                                                        <div className="loading-spinner"></div>
+                                                                        <p>추천 콘텐츠를 불러오는 중...</p>
+                                                                    </div>
+                                                                ) : recommendationData.length === 0 ? (
+                                                                    <p className="no-recommendation">어제 수집한 맞춤 콘텐츠를 불러올 수 없어요</p>
+                                                                ) : (
+                                                                    <div className="recommendation-grid">
+                                                                        {recommendationData.map((rec) => {
+                                                                            const categoryConfig = getCategoryConfig(rec.category);
+                                                                            return (
+                                                                                <a
+                                                                                    key={rec.id}
+                                                                                    href={rec.contentUrl}
+                                                                                    target="_blank"
+                                                                                    rel="noopener noreferrer"
+                                                                                    className={`recommendation-card ${rec.category.toLowerCase()}`}
+                                                                                    style={{
+                                                                                        backgroundColor: categoryConfig.backgroundColor,
+                                                                                        borderColor: categoryConfig.borderColor
+                                                                                    }}
+                                                                                    onClick={(e) => {
+                                                                                        if (rec.contentUrl) {
+                                                                                            e.preventDefault();
+                                                                                            window.open(rec.contentUrl, '_blank');
+                                                                                        }
+                                                                                    }}
+                                                                                >
+                                                                                    <div className="recommendation-card-header">
+                                                                                        <span className="recommendation-category-icon">{categoryConfig.icon}</span>
+                                                                                        <span className="recommendation-category">{rec.category}</span>
+                                                                                    </div>
+                                                                                    <h4 className="recommendation-title">{rec.title}</h4>
+                                                                                    <p className="recommendation-description">{rec.description}</p>
+                                                                                    {rec.imageUrl && (
+                                                                                        <img 
+                                                                                            src={rec.imageUrl} 
+                                                                                            alt={rec.title} 
+                                                                                            className="recommendation-image"
+                                                                                            onError={(e) => {
+                                                                                                (e.target as HTMLImageElement).style.display = 'none';
+                                                                                            }}
+                                                                                        />
+                                                                                    )}
+                                                                                </a>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     </div>
