@@ -1,9 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import type { ReactNode } from 'react';
-import HomePage from './pages/HomePage';
+import MainPage from './pages/MainPage';
 import LoginPage from './pages/LoginPage';
 import Profile from './pages/Profile';
-import EmotionCalendar from './components/EmotionCalendar';
 import DiaryWritePage from './pages/DiaryWritePage';
 import useAuthStore from './store/authStore';
 
@@ -21,7 +20,7 @@ function App() {
           path="/"
           element={
             <PrivateRoute>
-              <HomePage />
+              <MainPage />
             </PrivateRoute>
           }
         />
@@ -30,14 +29,6 @@ function App() {
           element={
             <PrivateRoute>
               <DiaryWritePage />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/calendar"
-          element={
-            <PrivateRoute>
-              <EmotionCalendar diaries={[]} />
             </PrivateRoute>
           }
         />
