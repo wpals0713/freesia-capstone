@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { sendFeedback } from '../api/recommendation';
+import FeedbackModal from '../components/FeedbackModal';
 import './MainPage.css';
 
 // 추천 데이터 인터페이스
@@ -12,7 +14,7 @@ export interface RecommendationResponse {
   contentUrl: string;
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+const API_BASE_URL = (import.meta as unknown as { env: { VITE_API_BASE_URL?: string } }).env?.VITE_API_BASE_URL || 'http://localhost:8080';
 
 interface Message {
     id: number;
@@ -159,6 +161,19 @@ function MainPage() {
         }
     };
     
+    // 싫어요 처리 함수 (컴포넌트 내부에서 정의하여 loadRecommendations 접근)
+    const handleDislike = async (recommendationId: number, emotion: string) => {
+        try {
+            await sendFeedback(recommendationId, true);
+            alert("앞으로 이런 콘텐츠는 추천하지 않을게요! ✨");
+            // 추천 리스트 즉시 새로고침
+            await loadRecommendations(emotion);
+        } catch (error) {
+            console.error('피드백 전송 실패:', error);
+            alert('피드백 전송에 실패했습니다. 다시 시도해주세요.');
+        }
+    };
+    
     // ESC 키로 모달 닫기
     useEffect(() => {
         const handleEscKey = (event: KeyboardEvent) => {
@@ -205,6 +220,9 @@ function MainPage() {
     // 아코디언 모달 상태 - 여러 일기를 위한 배열
     const [selectedDiaries, setSelectedDiaries] = useState<DiaryEntry[]>([]);
     const [expandedDiaryIndex, setExpandedDiaryIndex] = useState<number | null>(null);
+    
+    // 피드백 모달 상태
+    const [showFeedbackModal, setShowFeedbackModal] = useState(false);
     
     // UI 연동: 그래프 데이터
     const [graphData, setGraphData] = useState<{ emotion: string; count: number }[]>([]);
@@ -901,6 +919,11 @@ function MainPage() {
         setIsRecommendationPopupOpen(false);
     };
     
+    // 피드백 모달 닫기
+    const closeFeedbackModal = () => {
+        setShowFeedbackModal(false);
+    };
+    
     // ESC 키로 추천 팝업 닫기
     useEffect(() => {
         const handleEscKey = (event: KeyboardEvent) => {
@@ -916,6 +939,16 @@ function MainPage() {
             document.removeEventListener('keydown', handleEscKey);
         };
     }, []);
+    
+    // 일기 모달 닫기 시 피드백 모달 표시
+    const handleDiaryModalClose = () => {
+        setSelectedDiaries([]);
+        setExpandedDiaryIndex(null);
+        // 일기 모달이 닫히면 피드백 모달 표시
+        if (recommendationData.length > 0) {
+            setShowFeedbackModal(true);
+        }
+    };
     
     // 콘텐츠 플레이어 열기
     const openPlayer = (diary: DiaryEntry) => {
@@ -1458,18 +1491,14 @@ function MainPage() {
                                 onClick={(e) => {
                                     // 배경 (오버레이) 클릭 시 모달 닫기
                                     // 콘텐츠 영역 클릭 시에는 전파되지 않음 (stopPropagation)
-                                    setSelectedDiaries([]);
-                                    setExpandedDiaryIndex(null);
+                                    handleDiaryModalClose();
                                 }}
                             >
                                 <div 
                                     className="diary-detail-modal__content"
                                     onClick={(e) => e.stopPropagation()}
                                 >
-                                    <button className="popup-close-btn" onClick={() => {
-                                        setSelectedDiaries([]);
-                                        setExpandedDiaryIndex(null);
-                                    }}>×</button>
+                                    <button className="popup-close-btn" onClick={handleDiaryModalClose}>×</button>
                                     <div className="diary-detail-modal__header">
                                         <div className="diary-detail-modal__date">
                                             📅 일기 목록
@@ -1579,11 +1608,11 @@ function MainPage() {
                                                                                         }
                                                                                     }}
                                                                                 >
-                                                                                    <div className="recommendation-card-header">
-                                                                                        <span className="recommendation-category-icon">{categoryConfig.icon}</span>
-                                                                                        <span className="recommendation-category">{rec.category}</span>
-                                                                                    </div>
-                                                                                    <h4 className="recommendation-title">{rec.title}</h4>
+                                                                                <div className="recommendation-card-header">
+                                                                                    <span className="recommendation-category-icon">{categoryConfig.icon}</span>
+                                                                                    <span className="recommendation-category">{rec.category}</span>
+                                                                                </div>
+                                                                                <h4 className="recommendation-title">{rec.title}</h4>
                                                                                     <p className="recommendation-description">{rec.description}</p>
                                                                                     {rec.imageUrl && (
                                                                                         <img 
@@ -1884,6 +1913,13 @@ function MainPage() {
                     </div>
                 </div>
             )}
+            
+            {/* 피드백 모달 - 일기 모달 닫기 후 표시 */}
+            <FeedbackModal
+                recommendations={recommendationData}
+                isOpen={showFeedbackModal}
+                onClose={closeFeedbackModal}
+            />
         </div>
     );
 }

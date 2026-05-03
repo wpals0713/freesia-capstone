@@ -1,15 +1,29 @@
 package com.freesia.backend.recommendation.controller;
 
+import com.freesia.backend.global.ApiResponse;
+import com.freesia.backend.global.exception.BusinessException;
+import com.freesia.backend.global.security.JwtProvider;
+import com.freesia.backend.member.entity.Member;
+import com.freesia.backend.member.repository.MemberRepository;
 import com.freesia.backend.recommendation.dto.RecommendationResponse;
+import com.freesia.backend.recommendation.entity.Recommendation;
+import com.freesia.backend.recommendation.entity.RecommendationFeedback;
+import com.freesia.backend.recommendation.repository.RecommendationFeedbackRepository;
+import com.freesia.backend.recommendation.repository.RecommendationRepository;
 import com.freesia.backend.recommendation.service.ActivityCrawlingService;
 import com.freesia.backend.recommendation.service.BookCrawlingService;
 import com.freesia.backend.recommendation.service.RecommendationService;
 import com.freesia.backend.recommendation.service.MusicCrawlingService;
 import com.freesia.backend.recommendation.service.MovieCrawlingService;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -29,6 +43,43 @@ public class RecommendationController {
     private final BookCrawlingService bookCrawlingService;
     private final MovieCrawlingService movieCrawlingService;
     private final ActivityCrawlingService activityCrawlingService;
+    private final MemberRepository memberRepository;
+    private final RecommendationFeedbackRepository feedbackRepository;
+    private final RecommendationRepository recommendationRepository;
+    private final JwtProvider jwtProvider;
+
+    /**
+     * 현재 로그인한 사용자의 정보를 가져옵니다.
+     */
+    private Member getCurrentMember() {
+        var authentication = org.springframework.security.core.context.SecurityContextHolder.getContext()
+                .getAuthentication();
+
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new BusinessException("인증 정보가 없습니다.", HttpStatus.UNAUTHORIZED);
+        }
+
+        Object principal = authentication.getPrincipal();
+        Long memberId;
+
+        if (principal instanceof String) {
+            // UsernamePasswordAuthenticationToken 의 경우 principal 이 UserDetails
+            memberId = Long.parseLong((String) authentication.getPrincipal());
+        } else if (principal instanceof com.freesia.backend.global.security.CustomUserDetails) {
+            // CustomUserDetails 의 경우 memberId 필드 사용
+            memberId = ((com.freesia.backend.global.security.CustomUserDetails) principal).getMemberId();
+        } else if (principal instanceof org.springframework.security.core.userdetails.UserDetails) {
+            // 기타 UserDetails 의 경우 email 로 조회
+            String email = ((org.springframework.security.core.userdetails.UserDetails) principal).getUsername();
+            return memberRepository.findByEmail(email)
+                    .orElseThrow(() -> new BusinessException("존재하지 않는 회원입니다.", HttpStatus.NOT_FOUND));
+        } else {
+            throw new BusinessException("인증 정보를 추출할 수 없습니다.", HttpStatus.UNAUTHORIZED);
+        }
+
+        return memberRepository.findById(memberId)
+                .orElseThrow(() -> new BusinessException("존재하지 않는 회원입니다.", HttpStatus.NOT_FOUND));
+    }
 
     /**
      * 특정 감정에 맞는 추천 콘텐츠를 조회합니다.
@@ -164,6 +215,65 @@ public class RecommendationController {
             response.put("status", "error");
             response.put("message", "모바일 네이버 블로그 활동 크롤링 중 오류가 발생했습니다: " + e.getMessage());
             return ResponseEntity.internalServerError().body(response);
+        }
+    }
+
+    /**
+     * 추천 콘텐츠에 대한 사용자 피드백을 저장합니다.
+     *
+     * @param recommendationId 추천 콘텐츠 ID
+     * @param request          피드백 요청 (isDisliked: true=싫어요, false=좋아요)
+     * @return 저장 결과
+     */
+    @PostMapping("/{recommendationId}/feedback")
+    @Transactional
+    public ResponseEntity<ApiResponse<Void>> saveFeedback(
+            @PathVariable Long recommendationId,
+            @RequestBody FeedbackRequest request) {
+        try {
+            Member member = getCurrentMember();
+            Recommendation recommendation = recommendationRepository.findById(recommendationId)
+                    .orElseThrow(() -> new IllegalArgumentException("추천 콘텐츠를 찾을 수 없습니다: " + recommendationId));
+
+            // 이미 같은 사용자가 같은 콘텐츠에 피드백을 남겼는지 확인
+            boolean exists = feedbackRepository.existsByMemberAndRecommendationIdAndIsDisliked(member,
+                    recommendationId);
+            if (exists) {
+                // 이미 싫어요를 누른 상태이므로 무시 (중복 방지)
+                log.info("이미 피드백이 존재합니다: member={}, recommendationId={}", member.getId(), recommendationId);
+                return ResponseEntity.ok(ApiResponse.success("이미 피드백이 존재합니다."));
+            }
+
+            // 피드백 저장
+            RecommendationFeedback feedback = RecommendationFeedback.builder()
+                    .member(member)
+                    .recommendation(recommendation)
+                    .isDisliked(request.isDisliked())
+                    .build();
+            feedbackRepository.save(feedback);
+
+            log.info("피드백 저장 완료: member={}, recommendationId={}, isDisliked={}",
+                    member.getId(), recommendationId, request.isDisliked());
+            return ResponseEntity.ok(ApiResponse.success("피드백이 저장되었습니다."));
+        } catch (Exception e) {
+            log.error("피드백 저장 실패: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError()
+                    .body(ApiResponse.failure("피드백 저장 중 오류가 발생했습니다: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * 피드백 요청 DTO
+     */
+    public static class FeedbackRequest {
+        private boolean isDisliked;
+
+        public boolean isDisliked() {
+            return isDisliked;
+        }
+
+        public void setIsDisliked(boolean isDisliked) {
+            this.isDisliked = isDisliked;
         }
     }
 }
