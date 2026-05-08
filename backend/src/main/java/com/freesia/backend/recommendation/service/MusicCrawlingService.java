@@ -76,6 +76,13 @@ public class MusicCrawlingService {
      */
     public void collectYouTubeRecommendations() {
         log.info("=== YouTube 추천 데이터 수집 시작 ===");
+        log.info("YouTube API 키 설정 여부: {}", youtubeApiKey != null && !youtubeApiKey.isEmpty() ? "설정됨" : "미설정");
+        log.info("YouTube API Base URL: {}", youtubeBaseUrl);
+        log.info("최대 결과 수: {}", maxResults);
+        log.info("총 감정 종류 수: {}", EMOTION_SEARCH_QUERIES.size());
+
+        int totalQueries = EMOTION_SEARCH_QUERIES.values().stream().mapToInt(List::size).sum();
+        log.info("총 검색어 수: {}", totalQueries);
 
         int savedCount = 0;
         int skippedCount = 0;
@@ -85,6 +92,7 @@ public class MusicCrawlingService {
             List<String> searchQueries = entry.getValue();
 
             log.info("감정: {} - 검색어 {} 개 조회", emotion, searchQueries.size());
+            log.debug("감정 {} 검색어 목록: {}", emotion, searchQueries);
 
             for (String query : searchQueries) {
                 try {
@@ -109,20 +117,24 @@ public class MusicCrawlingService {
     }
 
     // 브이로그, 룩북 등 관련 없는 콘텐츠 필터링을 위한 마이너스 키워드
-    private static final String NEGATIVE_KEYWORDS = " -\"브이로그\" -\"룩북\" -\"vlog\" -\"lookbook\" -\"playlist\"";
+    private static final String NEGATIVE_KEYWORDS = " -\"브이로그\" -\"룩북\" -\"vlog\" -\"lookbook\" -\"playlist\" -\"teaser\" -\"티저\"";
+
+    // 공식 뮤직비디오만 검색하기 위한 접미사
+    private static final String OFFICIAL_MV_SUFFIX = " Official MV";
 
     /**
      * YouTube Search API 를 호출하여 비디오 목록을 가져옵니다.
      * - type=video: 재생목록이나 채널 배제
      * - videoCategoryId=10: YouTube 카테고리 10 번 = Music
+     * - 검색어에 "Official MV" 접미사 추가하여 공식 뮤직비디오만 검색
      * - 마이너스 키워드: 브이로그, 룩북 등 관련 없는 콘텐츠 필터링
      */
     private List<YouTubeVideo> searchYouTubeVideos(String query, String emotion) {
-        // 검색어에 마이너스 키워드 추가하여 브이로그/룩북 필터링
-        String filteredQuery = query + NEGATIVE_KEYWORDS;
+        // 검색어에 "Official MV" 접미사와 마이너스 키워드 추가
+        String optimizedQuery = query + OFFICIAL_MV_SUFFIX + NEGATIVE_KEYWORDS;
 
         String url = String.format("%s/search?part=snippet&maxResults=%d&q=%s&type=video&videoCategoryId=10&key=%s",
-                youtubeBaseUrl, maxResults, encodeQuery(filteredQuery), youtubeApiKey);
+                youtubeBaseUrl, maxResults, encodeQuery(optimizedQuery), youtubeApiKey);
 
         log.debug("YouTube API 호출: {}", url);
 
@@ -144,7 +156,157 @@ public class MusicCrawlingService {
             videos.add(video);
         }
 
-        return videos;
+        // 영상 길이 필터링: 1 분 미만 영상 제외
+        return filterVideosByDuration(videos);
+    }
+
+    /**
+     * 영상 길이를 필터링합니다.
+     * - YouTube Data API v3 는 검색 시 duration 파라미터를 지원하지 않으므로,
+     * 비디오 상세 정보를 조회하여 길이를 확인합니다.
+     * - 1 분 (60 초) 미만의 짧은 영상은 제외합니다.
+     */
+    private List<YouTubeVideo> filterVideosByDuration(List<YouTubeVideo> videos) {
+        List<YouTubeVideo> filteredVideos = new ArrayList<>();
+        int skippedCount = 0;
+
+        for (YouTubeVideo video : videos) {
+            try {
+                // 비디오 상세 정보를 조회하여 길이 확인
+                YouTubeVideoDetails details = getVideoDetails(video.getVideoId());
+
+                if (details != null && details.getDurationSeconds() >= 60) {
+                    filteredVideos.add(video);
+                } else {
+                    skippedCount++;
+                }
+            } catch (Exception e) {
+                log.debug("비디오 상세 정보 조회 실패 (스킵): {}", video.getVideoId());
+                // 오류 발생 시에도 영상은 포함 (필터링 실패 시에는 포함)
+                filteredVideos.add(video);
+            }
+        }
+
+        log.debug("영상 길이 필터링 완료: {}개 중 {}개 제외", videos.size(), skippedCount);
+        return filteredVideos;
+    }
+
+    /**
+     * YouTube Video API 를 호출하여 비디오 상세 정보를 가져옵니다.
+     */
+    private YouTubeVideoDetails getVideoDetails(String videoId) {
+        String url = String.format("%s/videos?part=contentDetails&id=%s&key=%s",
+                youtubeBaseUrl, videoId, youtubeApiKey);
+
+        try {
+            YouTubeVideoDetailsResponse response = restTemplate.getForObject(url, YouTubeVideoDetailsResponse.class);
+
+            if (response == null || response.getItems() == null || response.getItems().isEmpty()) {
+                return null;
+            }
+
+            YouTubeVideoDetails details = new YouTubeVideoDetails();
+            String duration = response.getItems().get(0).getContentDetails().getDuration();
+            details.setDurationSeconds(parseDuration(duration));
+            return details;
+        } catch (Exception e) {
+            log.debug("비디오 상세 정보 조회 실패: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * ISO 8601 형식 지속 시간을 초 단위로 변환합니다.
+     * 예: PT1M30S -> 90 초, PT2M -> 120 초
+     */
+    private int parseDuration(String duration) {
+        try {
+            if (duration == null || !duration.startsWith("PT")) {
+                return 0;
+            }
+
+            int seconds = 0;
+            String timePart = duration.substring(2); // "PT" 제거
+
+            // 시간 (H)
+            int hoursIndex = timePart.indexOf('H');
+            if (hoursIndex != -1) {
+                seconds += Integer.parseInt(timePart.substring(0, hoursIndex)) * 3600;
+                timePart = timePart.substring(hoursIndex + 1);
+            }
+
+            // 분 (M)
+            int minutesIndex = timePart.indexOf('M');
+            if (minutesIndex != -1) {
+                seconds += Integer.parseInt(timePart.substring(0, minutesIndex)) * 60;
+                timePart = timePart.substring(minutesIndex + 1);
+            }
+
+            // 초 (S)
+            if (!timePart.isEmpty()) {
+                seconds += Integer.parseInt(timePart.substring(0, timePart.indexOf('S')));
+            }
+
+            return seconds;
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    // ==================== DTO 클래스 ====================
+
+    /**
+     * YouTube Video API 응답 DTO
+     */
+    public static class YouTubeVideoDetailsResponse {
+        private List<Item> items;
+
+        public List<Item> getItems() {
+            return items;
+        }
+
+        public void setItems(List<Item> items) {
+            this.items = items;
+        }
+
+        public static class Item {
+            private ContentDetails contentDetails;
+
+            public ContentDetails getContentDetails() {
+                return contentDetails;
+            }
+
+            public void setContentDetails(ContentDetails contentDetails) {
+                this.contentDetails = contentDetails;
+            }
+        }
+
+        public static class ContentDetails {
+            private String duration;
+
+            public String getDuration() {
+                return duration;
+            }
+
+            public void setDuration(String duration) {
+                this.duration = duration;
+            }
+        }
+    }
+
+    /**
+     * YouTube 비디오 상세 정보 DTO
+     */
+    public static class YouTubeVideoDetails {
+        private int durationSeconds;
+
+        public int getDurationSeconds() {
+            return durationSeconds;
+        }
+
+        public void setDurationSeconds(int durationSeconds) {
+            this.durationSeconds = durationSeconds;
+        }
     }
 
     /**

@@ -88,7 +88,8 @@ public class RecommendationController {
      * @return 추천 콘텐츠 리스트
      */
     @GetMapping
-    public ResponseEntity<List<RecommendationResponse>> getRecommendationsByEmotion(@RequestParam String emotion) {
+    public ResponseEntity<List<RecommendationResponse>> getRecommendationsByEmotion(
+            @RequestParam(value = "emotion", required = false) String emotion) {
         List<RecommendationResponse> recommendations = recommendationService.getRecommendationsByEmotion(emotion);
         return ResponseEntity.ok(recommendations);
     }

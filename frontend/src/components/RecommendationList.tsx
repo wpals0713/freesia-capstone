@@ -13,6 +13,15 @@ const CATEGORY_CONFIG: Record<string, { icon: string; color: string }> = {
   HOBBY: { icon: '🎨', color: 'bg-yellow-100 text-yellow-600' },
 };
 
+// 카테고리별 기본 링크 매핑 (contentUrl 이 없을 때 사용)
+const CATEGORY_DEFAULT_LINKS: Record<string, (title: string) => string> = {
+  MUSIC: (title) => `https://www.youtube.com/results?search_query=${encodeURIComponent(title)}`,
+  MOVIE: (title) => `https://movie.daum.net/search?q=${encodeURIComponent(title)}`,
+  BOOK: (title) => `https://search.kyobo.co.kr/booksearch/aitemSearch.aum?keyword=${encodeURIComponent(title)}`,
+  ACTIVITY: (title) => `https://search.naver.com/search.naver?query=${encodeURIComponent(title)}`,
+  HOBBY: (title) => `https://search.naver.com/search.naver?query=${encodeURIComponent(title)}`,
+};
+
 const GRADIENT_PLACEHOLDER = 'bg-gradient-to-br from-rose-100 via-purple-100 to-indigo-100';
 
 export default function RecommendationList({ emotion }: RecommendationListProps) {
@@ -79,17 +88,21 @@ export default function RecommendationList({ emotion }: RecommendationListProps)
         {recommendations.map((rec) => {
           const categoryConfig = CATEGORY_CONFIG[rec.category] || { icon: '📌', color: 'bg-gray-100 text-gray-600' };
           const hasImage = rec.imageUrl && rec.imageUrl.length > 0;
+          
+          // contentUrl 이 없으면 카테고리별 기본 링크 사용
+          const linkUrl = rec.contentUrl || CATEGORY_DEFAULT_LINKS[rec.category]?.(rec.title) || '#';
+          const hasLink = linkUrl && linkUrl !== '#';
 
           return (
             <a
               key={rec.id}
-              href={rec.contentUrl || '#'}
-              target={rec.contentUrl ? '_blank' : undefined}
-              rel="noopener noreferrer"
+              href={linkUrl}
+              target={hasLink ? '_blank' : undefined}
+              rel={hasLink ? 'noopener noreferrer' : undefined}
               className={`
                 block rounded-2xl overflow-hidden
                 transition-all duration-300 transform hover:scale-105 hover:shadow-xl
-                ${!hasImage && !rec.contentUrl ? 'cursor-default hover:scale-100' : 'cursor-pointer'}
+                ${!hasImage && !hasLink ? 'cursor-default hover:scale-100' : 'cursor-pointer'}
               `}
             >
               {/* 이미지 또는 그라데이션 배경 */}

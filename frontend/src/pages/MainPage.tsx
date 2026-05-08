@@ -243,7 +243,7 @@ function MainPage() {
     const [typing, setTyping] = useState(false);
     
     // 현재 화면
-    const [currentView, setCurrentView] = useState<'chat' | 'calendar' | 'graph' | 'recommendations' | 'myInfo'>('chat');
+    const [currentView, setCurrentView] = useState<'chat' | 'calendar' | 'graph' | 'myInfo'>('chat');
     
     // 캘린더/그래프 상태
     const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -1307,13 +1307,6 @@ function MainPage() {
                     <span className="menu-icon">📈</span>
                     <span className="menu-label">그래프 화면</span>
                 </button>
-                <button 
-                    className={`menu-button ${currentView === 'recommendations' ? 'active' : ''}`}
-                    onClick={() => handleMenuClick('recommendations')}
-                >
-                    <span className="menu-icon">⭐</span>
-                    <span className="menu-label">콘텐츠 추천</span>
-                </button>
                 <button className="menu-button" onClick={toggleInquiryPopup}>
                     <span className="menu-icon">📞</span>
                     <span className="menu-label">문의하기</span>
@@ -1825,45 +1818,6 @@ function MainPage() {
                                 </div>
                             </div>
                         )}
-                    </div>
-                )}
-                
-                {/* 추천 화면 */}
-                {currentView === 'recommendations' && (
-                    <div className="recommendations-container">
-                        <div className="rec-header">
-                            <div className="rec-title">상황에 맞는 콘텐츠 추천</div>
-                            <button className="rec-back" onClick={() => setCurrentView('chat')}>메인 화면으로 돌아가기</button>
-                        </div>
-                        <div className="rec-subtitle">상황: 최근 감정에 맞춘 추천을 준비했어요</div>
-                        <div className="rec-columns">
-                            <div className="rec-col">
-                                <div className="rec-col-title">추천 노래 리스트</div>
-                                <div className="rec-grid" style={{display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px'}}>
-                                    {recommendations.filter((_, i) => i % 2 === 0).map((rec, i) => (
-                                        <div key={i} className="rec-card">
-                                            <span className="rec-tag">{rec.tag}</span>
-                                            <h3>{rec.title}</h3>
-                                            <p>{rec.desc}</p>
-                                            <a className="rec-link" href={rec.url} target="_blank" rel="noopener noreferrer">바로가기</a>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                            <div className="rec-col">
-                                <div className="rec-col-title">추천 글귀 리스트</div>
-                                <div className="rec-grid" style={{display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px'}}>
-                                    {recommendations.filter((_, i) => i % 2 === 1).map((rec, i) => (
-                                        <div key={i} className="rec-card">
-                                            <span className="rec-tag">{rec.tag}</span>
-                                            <h3>{rec.title}</h3>
-                                            <p>{rec.desc}</p>
-                                            <a className="rec-link" href={rec.url} target="_blank" rel="noopener noreferrer">바로가기</a>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
                     </div>
                 )}
                 

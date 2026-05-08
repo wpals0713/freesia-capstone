@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import re
+import time
 
 import requests
 from dotenv import load_dotenv
@@ -26,7 +27,8 @@ CORS(app)
 _DCU_API_URL  = "https://code.cu.ac.kr/llm/v1/chat/completions"
 _DCU_MODEL    = "Qwen/Qwen3.5-35B-A3B-FP8"
 _DCU_API_KEY  = os.getenv("DCU_LLM_API_KEY", "")
-_TIMEOUT_SEC  = 30          # 응답 대기 최대 시간 (초)
+_TIMEOUT_SEC  = 90          # 응답 대기 최대 시간 (초)
+_MAX_RETRIES  = 3           # 재시도 최대 횟수
 
 _VALID_EMOTIONS = {"기쁨", "슬픔", "분노", "불안", "중립"}
 
@@ -124,32 +126,65 @@ def _analyze_emotion(text: str) -> tuple[str, float, str]:
         "Content-Type":  "application/json",
     }
 
-    try:
-        resp = requests.post(
-            _DCU_API_URL,
-            json=payload,
-            headers=headers,
-            timeout=_TIMEOUT_SEC,
-        )
-        resp.raise_for_status()
+    retry_count = 0
+    last_exception = None
 
-    except requests.exceptions.Timeout:
-        logger.warning("[AI서버] LLM API 타임아웃 (%ds 초과) — 기본값 반환", _TIMEOUT_SEC)
-        return "중립", 0.0, ""
+    while retry_count < _MAX_RETRIES:
+        try:
+            logger.info(
+                "[AI서버] LLM API 요청 시작 (시도 %d/%d, timeout=%ds)",
+                retry_count + 1, _MAX_RETRIES, _TIMEOUT_SEC
+            )
 
-    except requests.exceptions.RequestException as exc:
-        logger.error("[AI서버] LLM API 호출 실패: %s — 기본값 반환", exc)
-        return "중립", 0.0, ""
+            resp = requests.post(
+                _DCU_API_URL,
+                json=payload,
+                headers=headers,
+                timeout=_TIMEOUT_SEC,
+            )
+            resp.raise_for_status()
 
-    # ── LLM 응답에서 content 추출 ──────────────────────────────────────────
-    try:
-        llm_text: str = resp.json()["choices"][0]["message"]["content"].strip()
-    except (KeyError, IndexError, ValueError) as exc:
-        logger.error("[AI서버] LLM 응답 구조 파싱 실패: %s | 응답=%s", exc, resp.text[:200])
-        return "중립", 0.0, ""
+            logger.info("[AI서버] LLM API 성공 (시도 %d/%d)", retry_count + 1, _MAX_RETRIES)
+            return _parse_llm_output(resp.json()["choices"][0]["message"]["content"].strip())
 
-    # ── content → JSON 파싱 ────────────────────────────────────────────────
-    return _parse_llm_output(llm_text)
+        except requests.exceptions.Timeout as exc:
+            retry_count += 1
+            last_exception = exc
+            if retry_count < _MAX_RETRIES:
+                logger.warning(
+                    "[AI서버] LLM API 타임아웃 (%ds 초과) — 시도 %d/%d 실패, 재시도 중...",
+                    _TIMEOUT_SEC, retry_count, _MAX_RETRIES
+                )
+            else:
+                logger.error(
+                    "[AI서버] LLM API 타임아웃 (%ds 초과) — 시도 %d/%d 모두 실패, 기본값 반환",
+                    _TIMEOUT_SEC, retry_count, _MAX_RETRIES
+                )
+                return "중립", 0.0, ""
+
+        except requests.exceptions.RequestException as exc:
+            retry_count += 1
+            last_exception = exc
+            if retry_count < _MAX_RETRIES:
+                logger.warning(
+                    "[AI서버] LLM API 호출 실패 (%s) — 시도 %d/%d 실패, 재시도 중...",
+                    str(exc), retry_count, _MAX_RETRIES
+                )
+            else:
+                logger.error(
+                    "[AI서버] LLM API 호출 실패 (%s) — 시도 %d/%d 모두 실패, 기본값 반환",
+                    str(exc), retry_count, _MAX_RETRIES
+                )
+                return "중립", 0.0, ""
+
+        # 재시도 전 대기 (지수 백오프: 1 초, 2 초, 4 초)
+        wait_time = 2 ** retry_count
+        logger.info("[AI서버] %d 초 후 재시도...", wait_time)
+        time.sleep(wait_time)
+
+    # 최종 실패 시 (이론적으로 위 루프에서 반환되므로 도달하지 않음)
+    logger.error("[AI서버] LLM API 최종 실패 — 기본값 반환")
+    return "중립", 0.0, ""
 
 
 def _parse_llm_output(llm_text: str) -> tuple[str, float, str]:
