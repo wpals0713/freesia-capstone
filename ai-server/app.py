@@ -62,6 +62,43 @@ def health():
     }), 200
 
 
+# ── 채팅 엔드포인트 ───────────────────────────────────────────────────────────
+
+@app.route("/api/chat", methods=["POST"])
+def chat():
+    """
+    Request Body (JSON):
+        { "text": "사용자 메시지 (시스템 프롬프트가 이미 적용됨)" }
+
+    Response (JSON):
+        {
+            "success": true,
+            "reply": "AI 의 응답 메시지"
+        }
+    """
+    body = request.get_json(silent=True)
+
+    if not body or "text" not in body:
+        return jsonify({
+            "success": False,
+            "message": "요청 본문에 'text' 필드가 필요합니다.",
+        }), 400
+
+    text: str = body["text"].strip()
+    if not text:
+        return jsonify({
+            "success": False,
+            "message": "'text' 값이 비어 있습니다.",
+        }), 400
+
+    reply = _generate_chat_response(text)
+
+    return jsonify({
+        "success": True,
+        "reply": reply,
+    }), 200
+
+
 # ── 감정 분석 엔드포인트 ──────────────────────────────────────────────────────
 
 @app.route("/api/analyze", methods=["POST"])
@@ -185,6 +222,98 @@ def _analyze_emotion(text: str) -> tuple[str, float, str]:
     # 최종 실패 시 (이론적으로 위 루프에서 반환되므로 도달하지 않음)
     logger.error("[AI서버] LLM API 최종 실패 — 기본값 반환")
     return "중립", 0.0, ""
+
+
+# ── 채팅 응답 생성 함수 ───────────────────────────────────────────────────────
+
+_CHAT_SYSTEM_PROMPT = (
+    "너는 다정하고 공감 능력이 뛰어난 다이어리 봇 '프리지아'야. "
+    "반말로 친근하게 대답해 줘. "
+    "사용자의 말에 공감하고 위로해주는 톤으로 답변해. "
+    "자연스럽고 따뜻한 대화체를 사용해."
+)
+
+def _generate_chat_response(user_message: str) -> str:
+    """
+    DCU LLM API 를 호출하여 채팅 응답을 생성합니다.
+    API 오류·파싱 실패·타임아웃 발생 시 기본 응답을 반환합니다.
+    """
+    if not _DCU_API_KEY:
+        logger.warning("[AI서버] API 키 없음 — 기본값 반환")
+        return "죄송해요, 지금 연결이 안 되고 있어요. 😢"
+
+    payload = {
+        "model": _DCU_MODEL,
+        "stream": False,
+        "messages": [
+            {"role": "system", "content": _CHAT_SYSTEM_PROMPT},
+            {"role": "user",   "content": user_message},
+        ],
+    }
+    headers = {
+        "Authorization": f"Bearer {_DCU_API_KEY}",
+        "Content-Type":  "application/json",
+    }
+
+    retry_count = 0
+    last_exception = None
+
+    while retry_count < _MAX_RETRIES:
+        try:
+            logger.info(
+                "[채팅] LLM API 요청 시작 (시도 %d/%d, timeout=%ds)",
+                retry_count + 1, _MAX_RETRIES, _TIMEOUT_SEC
+            )
+
+            resp = requests.post(
+                _DCU_API_URL,
+                json=payload,
+                headers=headers,
+                timeout=_TIMEOUT_SEC,
+            )
+            resp.raise_for_status()
+
+            logger.info("[채팅] LLM API 성공 (시도 %d/%d)", retry_count + 1, _MAX_RETRIES)
+            content = resp.json()["choices"][0]["message"]["content"].strip()
+            logger.info("[채팅] 응답: %s", content[:50])
+            return content
+
+        except requests.exceptions.Timeout as exc:
+            retry_count += 1
+            last_exception = exc
+            if retry_count < _MAX_RETRIES:
+                logger.warning(
+                    "[채팅] LLM API 타임아웃 (%ds 초과) — 시도 %d/%d 실패, 재시도 중...",
+                    _TIMEOUT_SEC, retry_count, _MAX_RETRIES
+                )
+            else:
+                logger.error(
+                    "[채팅] LLM API 타임아웃 (%ds 초과) — 시도 %d/%d 모두 실패, 기본값 반환",
+                    _TIMEOUT_SEC, retry_count, _MAX_RETRIES
+                )
+                return "죄송해요, 지금 연결이 안 되고 있어요. 😢"
+
+        except requests.exceptions.RequestException as exc:
+            retry_count += 1
+            last_exception = exc
+            if retry_count < _MAX_RETRIES:
+                logger.warning(
+                    "[채팅] LLM API 호출 실패 (%s) — 시도 %d/%d 실패, 재시도 중...",
+                    str(exc), retry_count, _MAX_RETRIES
+                )
+            else:
+                logger.error(
+                    "[채팅] LLM API 호출 실패 (%s) — 시도 %d/%d 모두 실패, 기본값 반환",
+                    str(exc), retry_count, _MAX_RETRIES
+                )
+                return "죄송해요, 지금 연결이 안 되고 있어요. 😢"
+
+        # 재시도 전 대기 (지수 백오프: 1 초, 2 초, 4 초)
+        wait_time = 2 ** retry_count
+        logger.info("[채팅] %d 초 후 재시도...", wait_time)
+        time.sleep(wait_time)
+
+    return "죄송해요, 지금 연결이 안 되고 있어요. 😢"
 
 
 def _parse_llm_output(llm_text: str) -> tuple[str, float, str]:

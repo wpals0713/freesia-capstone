@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { chat } from '../api/diary';
 import { sendFeedback } from '../api/recommendation';
 import FeedbackModal from '../components/FeedbackModal';
 import './MainPage.css';
@@ -505,16 +506,19 @@ function MainPage() {
         if (!message) return;
         
         if (chatMode === 'chat') {
-            // 일반 채팅 모드
+            // 일반 채팅 모드 - 백엔드 API 호출
             addUserMessage(message);
             setUserInput('');
             setTyping(true);
             
-            setTimeout(() => {
+            try {
+                const botResponse = await generateBotResponse(message);
                 setTyping(false);
-                const botResponse = generateBotResponse();
                 addBotMessage(botResponse);
-            }, 1000);
+            } catch (error) {
+                setTyping(false);
+                addBotMessage("죄송해요, 지금 연결이 안 되고 있어요. 😢");
+            }
         } else {
             // 일기 모드
             addUserMessage(message);
@@ -764,17 +768,20 @@ function MainPage() {
         }
     };
     
-    // 봇 응답 생성
-    const generateBotResponse = (): string => {
-        const responses = [
-            '그렇군요! 😊',
-            '재미있는 이야기네요! ✨',
-            '더 말씀해 주세요! 🌼',
-            '공감합니다! 💙',
-            '좋은 생각이에요! 👍',
-            '이해합니다! 🤗'
-        ];
-        return responses[Math.floor(Math.random() * responses.length)];
+    // 봇 응답 생성 (백엔드 API 호출)
+    const generateBotResponse = async (userMessage: string): Promise<string> => {
+        try {
+            const token = localStorage.getItem('accessToken');
+            if (!token) {
+                return "죄송해요, 로그인이 필요한 서비스예요. 😢";
+            }
+            
+            const response = await chat(userMessage);
+            return response.reply;
+        } catch (error) {
+            console.error('채팅 API 호출 실패:', error);
+            return "죄송해요, 지금 연결이 안 되고 있어요. 😢";
+        }
     };
     
     // 메시지 추가

@@ -30,44 +30,69 @@ public class MusicCrawlingService {
     @Value("${youtube.api.max-results:100}")
     private int maxResults;
 
-    // 감정별 YouTube 검색어 매핑 - 힐링 앱 목적에 맞는 위로 및 기분전환 키워드
+    // 감정별 YouTube 검색어 매핑 - K-POP, POP, J-POP 장르가 명확히 드러나는 트렌디 키워드
     private static final Map<String, List<String>> EMOTION_SEARCH_QUERIES = new HashMap<>();
 
     static {
-        // 슬픔: 따뜻하게 위로가 되는 노래들
-        EMOTION_SEARCH_QUERIES.put("슬픔", List.of(
-                "따뜻하게 위로가 되는 노래", "힘들 때 듣는 힐링 플레이리스트", "토닥토닥 위로해주는 잔잔한 음악",
-                "우울할 때 기분 좋아지는 따뜻한 노래", "마음이 편안해지는 어쿠스틱",
-                "위로가 되는 발라드 모음", "마음 치유되는 음악", "슬플 때 듣는 따뜻한 노래",
-                "차분한 위로 음악", "마음이 포근해지는 노래"));
-
-        // 분노: 스트레스 해소 및 진정 음악
-        EMOTION_SEARCH_QUERIES.put("분노", List.of(
-                "스트레스가 확 풀리는 시원한 팝송", "답답할 때 듣는 청량한 노래", "마음이 차분해지는 진정 음악",
-                "드라이브 갈 때 듣는 신나는 노래", "복잡한 생각을 비워주는 피아노곡",
-                "스트레스 해소 음악", "마음 정화되는 노래", "청량한 여름 노래",
-                "차분해지는 재즈", "마음이 맑아지는 음악"));
-
-        // 불안: 안정감과 편안함을 주는 음악
-        EMOTION_SEARCH_QUERIES.put("불안", List.of(
-                "마음이 편안해지는 수면 음악", "불안감을 낮춰주는 힐링 주파수", "안정감을 주는 잔잔한 지브리 OST",
-                "차분하게 릴랙스되는 재즈", "따뜻한 차 한 잔과 어울리는 노래",
-                "마음 안정되는 클래식", "불안할 때 듣는 잔잔한 음악", "편안한 수면 음악",
-                "차분한 피아노 곡", "마음이 편안해지는 자연 소리"));
-
-        // 무기력: 에너지 충전 및 동기부여 음악
-        EMOTION_SEARCH_QUERIES.put("무기력", List.of(
-                "에너지가 뿜뿜하는 신나는 노동요", "동기부여가 되는 벅찬 팝송", "아침을 상쾌하게 깨우는 노래",
-                "텐션 올리기 좋은 아이돌 노래", "무기력 탈출 신나는 플레이리스트",
-                "에너지 충전 음악", "활기찬 아침 노래", "운동할 때 듣는 신나는 노래",
-                "기분 전환 좋은 업템포", "동기부여 되는 팝송"));
-
-        // 기쁨: 행복과 즐거움을 증폭시키는 노래들
+        // 기쁨: 신나고 청량한 K-POP/POP/J-POP
         EMOTION_SEARCH_QUERIES.put("기쁨", List.of(
-                "너무 행복해서 날아갈 것 같은 노래", "기분 째지는 신나는 노래", "햇살 좋은 날 듣기 좋은 플레이리스트",
-                "청량하고 밝은 K-pop", "내적 댄스 유발하는 팝송",
-                "행복한 기분이 되는 노래", "웃음 나는 신나는 노래", "기분 좋은 여름 노래",
-                "밝은 에너지의 노래", "기분 전환 좋은 팝송"));
+                "신나는 KPOP", "청량한 KPOP 아이돌", "Upbeat Pop", "신나는 JPOP",
+                "Happy KPOP 2024", "Bright Pop Songs", "KPOP 댄스곡", "JPOP 업템포",
+                "Fun Pop Music", "KPOP 아이돌 신나는 곡"));
+
+        // 슬픔: 감성적인 K-POP 발라드/POP 발라드
+        EMOTION_SEARCH_QUERIES.put("슬픔", List.of(
+                "감성적인 KPOP 발라드", "Sad Pop", "이별 JPOP",
+                "KPOP 슬픈 발라드", "Emotional Pop Ballad", "JPOP 감성 발라드",
+                "KPOP 눈물 발라드", "Sad Korean Pop", "JPOP 이별송", "KPOP 발라드 모음"));
+
+        // 분노: 강렬한 K-POP 댄스/록 팝
+        EMOTION_SEARCH_QUERIES.put("분노", List.of(
+                "강렬한 KPOP 댄스", "Rock Pop", "비트 빠른 JPOP",
+                "KPOP 강렬한 댄스곡", "Aggressive Pop", "JPOP 빠른 비트",
+                "KPOP 힙합 팝", "Powerful KPOP", "JPOP 록 팝", "KPOP 퍼포먼스 곡"));
+
+        // 불안: 차분한 K-POP/POP 어쿠스틱
+        EMOTION_SEARCH_QUERIES.put("불안", List.of(
+                "차분한 KPOP 어쿠스틱", "Calm Pop", "잔잔한 JPOP",
+                "KPOP 잔잔한 곡", "Relaxing Pop Music", "JPOP 차분한 발라드",
+                "KPOP 어쿠스틱 커버", "Peaceful Pop", "JPOP 잔잔한 곡", "KPOP 트로트 발라드"));
+
+        // 무기력: 에너지 충전 K-POP/POP 업템포
+        EMOTION_SEARCH_QUERIES.put("무기력", List.of(
+                "에너지 충전 KPOP", "Energetic Pop", "Upbeat JPOP",
+                "KPOP 댄스 팝", "Motivational Pop", "JPOP 신나는 곡",
+                "KPOP 활동곡", "High Energy Pop", "JPOP 댄스곡", "KPOP 템포 빠른 곡"));
+
+        // 행복: 밝고 경쾌한 K-POP/POP
+        EMOTION_SEARCH_QUERIES.put("행복", List.of(
+                "밝은 KPOP 곡", "Cheerful Pop", "경쾌한 JPOP",
+                "KPOP 해피송", "Happy Vibes Pop", "JPOP 밝은 곡",
+                "KPOP 경쾌한 댄스곡", "Positive Pop", "JPOP 해피 팝", "KPOP 기분 좋은 곡"));
+
+        // 설렘: 로맨틱한 K-POP 발라드/POP 발라드
+        EMOTION_SEARCH_QUERIES.put("설렘", List.of(
+                "로맨틱한 KPOP", "Romantic Pop", "설렘 JPOP",
+                "KPOP 커플곡", "Love Pop Songs", "JPOP 로맨틱 발라드",
+                "KPOP 사랑송", "Sweet Pop", "JPOP 연애송", "KPOP 감성 러브송"));
+
+        // 외로움: 쓸쓸한 K-POP 발라드/인디 팝
+        EMOTION_SEARCH_QUERIES.put("외로움", List.of(
+                "쓸쓸한 KPOP 발라드", "Lonely Pop", "외로운 JPOP",
+                "KPOP 쓸쓸한 곡", "Melancholy Pop", "JPOP 외로움 발라드",
+                "KPOP 감성 곡", "Sad Korean Ballad", "JPOP 쓸쓸한 노래", "KPOP 인디 팝"));
+
+        // 안정: 편안한 K-POP/POP 어쿠스틱
+        EMOTION_SEARCH_QUERIES.put("안정", List.of(
+                "편안한 KPOP 어쿠스틱", "Peaceful Pop", "차분한 JPOP",
+                "KPOP 힐링곡", "Calm Down Pop", "JPOP 편안한 곡",
+                "KPOP 잔잔한 어쿠스틱", "Soothing Pop", "JPOP 힐링 발라드", "KPOP 라운지 팝"));
+
+        // 희망: 긍정적인 K-POP/POP 업템포
+        EMOTION_SEARCH_QUERIES.put("희망", List.of(
+                "힘이 되는 KPOP", "Hopeful Pop", "Positive JPOP",
+                "KPOP 동기부여 곡", "Inspiring Pop", "JPOP 희망찬 곡",
+                "KPOP 응원가", "Uplifting Pop", "JPOP 긍정적인 곡", "KPOP 에너지 곡"));
     }
 
     /**
@@ -104,6 +129,10 @@ public class MusicCrawlingService {
                         continue;
                     }
 
+                    // 제목 필터링 적용 (1 시간 반복, cover, playlist 등 제외)
+                    videos = filterVideosByTitle(videos);
+                    log.info("감정 {} 검색어 '{}'로 {}개의 비디오를 찾았습니다. (제목 필터링 후)", emotion, query, videos.size());
+
                     savedCount += saveVideosToDatabase(videos, emotion);
                     skippedCount += videos.size();
                 } catch (Exception e) {
@@ -117,10 +146,23 @@ public class MusicCrawlingService {
     }
 
     // 브이로그, 룩북 등 관련 없는 콘텐츠 필터링을 위한 마이너스 키워드
-    private static final String NEGATIVE_KEYWORDS = " -\"브이로그\" -\"룩북\" -\"vlog\" -\"lookbook\" -\"playlist\" -\"teaser\" -\"티저\"";
+    // 종교 음악 (CCM, 찬양, 예배 등) 을 강력하게 배제하기 위한 키워드 추가
+    private static final String NEGATIVE_KEYWORDS = " -\"브이로그\" -\"룩북\" -\"vlog\" -\"lookbook\" -\"playlist\" -\"teaser\" -\"티저\" -\"cover\" -\"커버\" -\"모음\" -\"1 시간\" -\"1 hour\" -\"loop\" -\"반복\" -\"CCM\" -\"찬양\" -\"예배\" -\"교회\" -\"worship\" -\"hymn\" -\"종교\" -\"찬송\" -\"가스펠\" -\"은혜\"";
 
     // 공식 뮤직비디오만 검색하기 위한 접미사
     private static final String OFFICIAL_MV_SUFFIX = " Official MV";
+
+    // 필터링할 키워드들 (공식 MV 가 아닌 영상 제외)
+    private static final List<String> FILTER_KEYWORDS = List.of(
+            "1 시간", "1 시간반", "1 hour", "1-hour", "1hour",
+            "loop", "looping", "반복", "무한반복",
+            "playlist", "플레이리스트", "모음", "모음집",
+            "cover", "커버", "acoustic cover", "piano cover",
+            "vlog", "브이로그", "룩북", "lookbook",
+            "reaction", "리액션", "listening", "감상",
+            "lyrics", "가사", "lyric video", "lyric",
+            "live", "라이브", "concert", "콘서트",
+            "performance", "퍼포먼스", "stage", "무대");
 
     /**
      * YouTube Search API 를 호출하여 비디오 목록을 가져옵니다.
@@ -188,6 +230,37 @@ public class MusicCrawlingService {
         }
 
         log.debug("영상 길이 필터링 완료: {}개 중 {}개 제외", videos.size(), skippedCount);
+        return filteredVideos;
+    }
+
+    /**
+     * 영상 제목을 필터링합니다.
+     * - "1 시간", "loop", "cover", "playlist" 등 공식 MV 가 아닌 영상은 제외합니다.
+     */
+    private List<YouTubeVideo> filterVideosByTitle(List<YouTubeVideo> videos) {
+        List<YouTubeVideo> filteredVideos = new ArrayList<>();
+        int skippedCount = 0;
+
+        for (YouTubeVideo video : videos) {
+            String title = video.getTitle().toLowerCase();
+            boolean shouldSkip = false;
+
+            for (String keyword : FILTER_KEYWORDS) {
+                if (title.contains(keyword.toLowerCase())) {
+                    shouldSkip = true;
+                    log.debug("제목 필터링으로 스킵: {} (키워드: {})", video.getTitle(), keyword);
+                    break;
+                }
+            }
+
+            if (!shouldSkip) {
+                filteredVideos.add(video);
+            } else {
+                skippedCount++;
+            }
+        }
+
+        log.info("제목 필터링 완료: {}개 중 {}개 제외", videos.size(), skippedCount);
         return filteredVideos;
     }
 
