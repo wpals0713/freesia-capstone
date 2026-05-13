@@ -1,5 +1,6 @@
 package com.freesia.backend.diary.controller;
 
+import com.freesia.backend.diary.dto.DiaryAnalysisResponse;
 import com.freesia.backend.diary.dto.DiaryCalendarResponse;
 import com.freesia.backend.diary.dto.DiaryRequestDTO;
 import com.freesia.backend.diary.dto.DiaryResponseDTO;
@@ -7,6 +8,8 @@ import com.freesia.backend.diary.dto.DiaryStatisticsResponseDTO;
 import com.freesia.backend.diary.service.DiaryService;
 import com.freesia.backend.global.ApiResponse;
 import com.freesia.backend.global.security.CustomUserDetails;
+import com.freesia.backend.recommendation.dto.RecommendationResponse;
+import com.freesia.backend.recommendation.service.RecommendationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -15,6 +18,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Collections;
 
 @RestController
 @RequestMapping("/api/diaries")
@@ -22,6 +26,7 @@ import java.util.List;
 public class DiaryController {
 
     private final DiaryService diaryService;
+    private final RecommendationService recommendationService;
 
     /**
      * POST /api/diaries
@@ -32,6 +37,30 @@ public class DiaryController {
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @Valid @RequestBody DiaryRequestDTO request) {
         DiaryResponseDTO response = diaryService.create(userDetails.getMemberId(), request);
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(ApiResponse.success("일기가 작성되었습니다.", response));
+    }
+
+    /**
+     * POST /api/diaries/analyze
+     * 일기 작성 후 감정 분석 및 추천 콘텐츠 반환
+     */
+    @PostMapping("/analyze")
+    public ResponseEntity<ApiResponse<DiaryAnalysisResponse>> createAndRecommend(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @Valid @RequestBody DiaryRequestDTO request) {
+        
+        // 1. 일기 작성 및 감정 분석
+        DiaryResponseDTO diaryResponse = diaryService.create(userDetails.getMemberId(), request);
+        
+        // 2. 분석된 감정을 바탕으로 추천 콘텐츠 조회
+        String emotion = diaryResponse.getEmotion();
+        List<RecommendationResponse> recommendations = recommendationService.getRecommendationsByEmotion(emotion);
+        
+        // 3. 응답 DTO 에 담아서 반환
+        DiaryAnalysisResponse response = DiaryAnalysisResponse.of(diaryResponse, recommendations);
+        
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(ApiResponse.success("일기가 작성되었습니다.", response));

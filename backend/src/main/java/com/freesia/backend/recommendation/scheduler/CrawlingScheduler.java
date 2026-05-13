@@ -55,6 +55,7 @@ public class CrawlingScheduler {
     @Scheduled(cron = "0 0 5 * * MON")
     public void weeklyMusicCrawling() {
         log.info("=== 매주 월요일 새벽 5 시 음악 크롤링 시작 ===");
+        log.info("MusicCrawlingService 빈 주입 여부: {}", musicCrawlingService != null ? "정상" : "실패");
 
         try {
             // 음악 크롤링

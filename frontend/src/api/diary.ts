@@ -79,3 +79,18 @@ export const getDiaryDetail = async (diaryId: number): Promise<DiaryDetailRespon
   const { data } = await api.get(`/diaries/${diaryId}`);
   return data.data;
 };
+
+// ── 채팅 API ──────────────────────────────────────────────────────────────────
+
+export interface ChatRequest {
+  message: string;
+}
+
+export interface ChatResponse {
+  reply: string;
+}
+
+export const chat = async (message: string): Promise<ChatResponse> => {
+  const { data } = await api.post('/chat', { message });
+  return data.data;
+};

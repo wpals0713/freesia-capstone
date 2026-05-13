@@ -27,7 +27,7 @@ public interface DiaryRepository extends JpaRepository<Diary, Long> {
             @Param("month") int month);
 
     /** 특정 회원의 특정 년/월 활성 일기 조회 (캘린더용 DTO) */
-    @Query("SELECT new com.freesia.backend.diary.dto.DiaryCalendarResponse(d.id, d.createdAt, d.emotion) " +
+    @Query("SELECT new com.freesia.backend.diary.dto.DiaryCalendarResponse(d.id, d.date, d.emotion) " +
             "FROM Diary d WHERE d.member.id = :memberId AND d.status = :status AND YEAR(d.date) = :year AND MONTH(d.date) = :month")
     List<DiaryCalendarResponse> findCalendarDiariesByMemberIdAndYearMonth(
             @Param("memberId") Long memberId,
