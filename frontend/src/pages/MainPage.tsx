@@ -536,10 +536,10 @@ function MainPage() {
                     return;
                 }
                 
-                console.log("📡 [Backend Request] Sending to /api/diaries:", { content: message, date: todayKey });
+                console.log("📡 [Backend Request] Sending to /api/diaries/analyze:", { content: message, date: todayKey });
                 
                 const diaryResponse = await axios.post(
-                    `${API_BASE_URL}/api/diaries`,
+                    `${API_BASE_URL}/api/diaries/analyze`,
                     { 
                         content: message, 
                         date: todayKey
@@ -552,7 +552,7 @@ function MainPage() {
                     }
                 );
                 
-                console.log("✅ [Backend Response] Received from /api/diaries:", diaryResponse.data);
+                console.log("✅ [Backend Response] Received from /api/diaries/analyze:", diaryResponse.data);
                 
                 if (!diaryResponse.data.success) {
                     setMessages(prev => {
@@ -570,13 +570,16 @@ function MainPage() {
                     return;
                 }
                 
-                // 백엔드 응답 데이터 매핑 확인 (실제 API 응답 구조에 맞게)
-                const backendEmotion = diaryResponse.data.data.dominantEmotion || diaryResponse.data.data.emotion || '중립';
-                const aiComment = diaryResponse.data.data.aiComment || diaryResponse.data.data.comment || '감정을 분석했습니다.';
-                const sentimentScore = diaryResponse.data.data.sentimentScore || diaryResponse.data.data.score || 0;
+                // 백엔드 응답 데이터 매핑 (새로운 응답 구조: data.data.diary, data.data.recommendations)
+                const diaryData = diaryResponse.data.data.diary;
+                const recommendations = diaryResponse.data.data.recommendations || [];
+                
+                const backendEmotion = diaryData.emotion || '중립';
+                const aiComment = diaryData.aiComment || '감정을 분석했습니다.';
+                const sentimentScore = diaryData.sentimentScore || 0;
                 const empathyEmoji = getEmpathyEmoji(backendEmotion);
                 
-                console.log("✅ [백엔드 응답] 감정 분석 완료 — emotion:", backendEmotion, "comment:", aiComment, "score:", sentimentScore);
+                console.log("✅ [백엔드 응답] 감정 분석 완료 — emotion:", backendEmotion, "comment:", aiComment, "score:", sentimentScore, "recommendations:", recommendations.length);
                 
                 setTyping(true);
                 
@@ -595,7 +598,7 @@ function MainPage() {
                 
                 // 1. 새 일기를 전역 diaries 상태에 즉시 추가 (실시간 동기화)
                 const newDiaryEntry: DiaryEntry = {
-                    id: diaryResponse.data.data.id,
+                    id: diaryData.id,
                     text: message,
                     content: message,
                     date: todayKey,
@@ -604,6 +607,52 @@ function MainPage() {
                     sentimentScore: sentimentScore
                 };
                 setDiaries(prev => [...prev, newDiaryEntry]);
+                
+                // 2. 추천 데이터를 새로운 데이터로 교체 (누적 방지)
+                if (recommendations.length > 0) {
+                    console.log("📌 추천 콘텐츠 수신:", recommendations.length, "개");
+                    // 추천 데이터를 DiaryEntry 형태로 변환하여 recommendations 상태에 교체
+                    const newRecommendationEntries: DiaryEntry[] = recommendations.map((rec: any) => ({
+                        id: rec.id,
+                        text: rec.description || rec.title,
+                        content: rec.description || rec.title,
+                        date: todayKey,
+                        emotion: backendEmotion,
+                        title: rec.title,
+                        desc: rec.description,
+                        url: rec.contentUrl,
+                        tag: rec.category
+                    }));
+                    setRecommendations(newRecommendationEntries); // 누적 방지: 교체로 변경
+                    
+                    // 추천 버튼 메시지 추가 (중복 방지: 기존 추천 버튼 제거 후 추가)
+                    setMessages(prev => {
+                        const filteredMessages = prev.filter(msg => 
+                            !msg.isRecommendationButton // 기존 추천 버튼 제거
+                        );
+                        return [...filteredMessages, { 
+                            id: Date.now() + 1, 
+                            text: `AI 가 추천 콘텐츠 보기`, 
+                            sender: 'bot',
+                            isRecommendationButton: true,
+                            emotion: backendEmotion
+                        }];
+                    });
+                } else {
+                    // 추천 데이터가 없는 경우에도 추천 버튼 표시 (중복 방지)
+                    setMessages(prev => {
+                        const filteredMessages = prev.filter(msg => 
+                            !msg.isRecommendationButton // 기존 추천 버튼 제거
+                        );
+                        return [...filteredMessages, { 
+                            id: Date.now() + 1, 
+                            text: `AI 가 추천 콘텐츠 보기`, 
+                            sender: 'bot',
+                            isRecommendationButton: true,
+                            emotion: backendEmotion
+                        }];
+                    });
+                }
                 
                 // 2. 현재 월 기준으로 필터링된 데이터 재계산 (실시간 반영) - prev 사용으로 최신 상태 참조
                 const updatedDiaries = [...diaries, newDiaryEntry];
@@ -635,17 +684,6 @@ function MainPage() {
                     { emotion: '불안', count: emotionCounts['불안'] || 0 }
                 ];
                 setGraphData(graphDataArray);
-                
-                // 추천 버튼 추가
-                setTimeout(() => {
-                    setMessages(prev => [...prev, { 
-                        id: Date.now() + 1, 
-                        text: `AI 가 추천 콘텐츠 보기`, 
-                        sender: 'bot',
-                        isRecommendationButton: true,
-                        emotion: backendEmotion
-                    }]);
-                }, 1000);
                 
             } catch (error: any) {
                 console.error('일기 저장 실패:', error);
@@ -1238,18 +1276,42 @@ function MainPage() {
                                     <p>팀장님을 위한 맞춤 힐링 콘텐츠를 찾는 중이에요 ✨</p>
                                 </div>
                             ) : recommendationData.length === 0 ? (
-                                <p className="no-recommendation">어제 수집한 맞춤 콘텐츠를 불러올 수 없어요</p>
+                                <div className="no-recommendation">
+                                    <p style={{fontSize: '16px', fontWeight: 'bold', color: '#d63031'}}>
+                                        😢 추천 콘텐츠를 불러올 수 없어요
+                                    </p>
+                                    <p style={{fontSize: '14px', color: '#666', marginTop: '10px'}}>
+                                        <strong>확인해주세요:</strong>
+                                    </p>
+                                    <ul style={{fontSize: '13px', color: '#999', textAlign: 'left', paddingLeft: '20px'}}>
+                                        <li>백엔드 서버가 실행 중인지 확인</li>
+                                        <li>DB 에 추천 데이터가 있는지 확인</li>
+                                        <li>감정 매칭이 제대로 되는지 로그 확인</li>
+                                    </ul>
+                                    <p style={{fontSize: '12px', color: '#ccc', marginTop: '15px'}}>
+                                        💡 개발자라면: POST /api/recommendations/refresh 로 데이터 재수집
+                                    </p>
+                                </div>
                             ) : (
                                 <div className="recommendation-grid">
                                     {recommendationData.map((rec) => {
                                         const categoryConfig = getCategoryConfig(rec.category);
+                                        // 고유 ID 가 없는 경우 timestamp 기반 키 생성
+                                        const keyId = rec.id || Date.now() + Math.random();
+                                        
+                                        // 필수 필드가 없는 경우 스킵
+                                        if (!rec.category) {
+                                            console.warn('추천 데이터에 category 가 없습니다:', rec);
+                                            return null;
+                                        }
+                                        
                                         return (
                                             <a
-                                                key={rec.id}
-                                                href={rec.contentUrl}
+                                                key={keyId}
+                                                href={rec.contentUrl || '#'}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className={`recommendation-card ${rec.category.toLowerCase()}`}
+                                                className={`recommendation-card ${rec.category?.toLowerCase() || 'music'}`}
                                                 style={{
                                                     backgroundColor: categoryConfig.backgroundColor,
                                                     borderColor: categoryConfig.borderColor
@@ -1265,21 +1327,25 @@ function MainPage() {
                                                     <span className="recommendation-category-icon">{categoryConfig.icon}</span>
                                                     <span className="recommendation-category">{rec.category}</span>
                                                 </div>
-                                                <h4 className="recommendation-title">{rec.title}</h4>
-                                                <p className="recommendation-description">{rec.description}</p>
-                                                {rec.imageUrl && (
+                                                <h4 className="recommendation-title">{rec.title || '제목 없음'}</h4>
+                                                <p className="recommendation-description">{rec.description || '설명 없음'}</p>
+                                                {rec.imageUrl ? (
                                                     <img 
                                                         src={rec.imageUrl} 
-                                                        alt={rec.title} 
+                                                        alt={rec.title || '추천 콘텐츠'} 
                                                         className="recommendation-image"
                                                         onError={(e) => {
                                                             (e.target as HTMLImageElement).style.display = 'none';
                                                         }}
                                                     />
+                                                ) : (
+                                                    <div className="recommendation-image-placeholder">
+                                                        {categoryConfig.icon}
+                                                    </div>
                                                 )}
                                             </a>
                                         );
-                                    })}
+                                    }).filter(Boolean)}
                                 </div>
                             )}
                         </div>

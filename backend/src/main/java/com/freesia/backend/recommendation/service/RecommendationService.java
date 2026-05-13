@@ -38,17 +38,32 @@ public class RecommendationService {
      * 사용자의 싫어요 피드백이 있는 콘텐츠는 제외됩니다.
      *
      * @param emotion 감정 카테고리 (예: "기쁨", "슬픔", "분노" 등)
-     * @return 추천 콘텐츠 리스트 (각 카테고리별 1 개씩, 총 4 개)
+     * @return 추천 콘텐츠 리스트 (각 카테고리별 1 개씩, 총 4 개). 추천 결과가 없으면 빈 리스트 반환.
      */
     public List<RecommendationResponse> getRecommendationsByEmotion(String emotion) {
-        // 1. 현재 로그인한 사용자의 ID 를 가져옵니다
+        // 0. 감정 파라미터가 null 이거나 빈 문자열인 경우 빈 리스트 반환
+        if (emotion == null || emotion.trim().isEmpty()) {
+            log.warn("감정 파라미터가 비어있습니다. emotion={}", emotion);
+            return Collections.emptyList();
+        }
+        
+        // 1. 감정 문자열 정규화 (공백 제거)
+        String normalizedEmotion = emotion.trim();
+        log.info("=== 추천 데이터 조회 시작 ===");
+        log.info("요청 감정: {}, 정규화 감정: {}", emotion, normalizedEmotion);
+        
+        // 2. 현재 로그인한 사용자의 ID 를 가져옵니다
         Long currentMemberId = getCurrentMemberId();
 
-        // 2. 해당 감정의 모든 데이터를 조회
-        List<Recommendation> allRecommendations = recommendationRepository.findByEmotion(emotion);
+        // 3. 해당 감정의 모든 데이터를 조회
+        List<Recommendation> allRecommendations = recommendationRepository.findByEmotion(normalizedEmotion);
 
-        log.info("=== 추천 데이터 조회 시작 ===");
-        log.info("감정: {}, 총 조회된 데이터 수: {}", emotion, allRecommendations.size());
+        log.info("감정: {}, 총 조회된 데이터 수: {}", normalizedEmotion, allRecommendations.size());
+        
+        // 4. 조회된 데이터가 없으면 경고 로그 출력
+        if (allRecommendations.isEmpty()) {
+            log.warn("감정 '{}'에 대한 추천 데이터가 없습니다. DB 에 해당 감정의 데이터가 있는지 확인해주세요.", normalizedEmotion);
+        }
 
         // 3. 사용자의 싫어요 목록을 조회하여 제외할 ID 리스트를 생성
         List<Long> dislikedIds;
@@ -145,32 +160,80 @@ public class RecommendationService {
      * - 교보문고 도서
      * - 다음 영화
      * - 네이버 포스트 활동
-     * 각 Service 에서 deleteByCategory 를 호출하여 기존 데이터를 정리한 후 새로 수집합니다.
+     * 기존 데이터를 삭제한 후 새로 수집합니다.
      */
     @Scheduled(cron = "0 0 3 * * MON-FRI") // 평일 매일 새벽 3 시
     public void scheduledCollectAllRecommendations() {
         log.info("=== 자동 추천 데이터 수집 시작 (매일 새벽 3 시) ===");
 
         try {
-            // 1. 음악 수집
+            // 1. 기존 데이터 삭제
+            log.info("기존 추천 데이터 삭제 시작...");
+            int deletedMusic = recommendationRepository.deleteByCategory("MUSIC");
+            int deletedBook = recommendationRepository.deleteByCategory("BOOK");
+            int deletedMovie = recommendationRepository.deleteByCategory("MOVIE");
+            int deletedActivity = recommendationRepository.deleteByCategory("ACTIVITY");
+            log.info("삭제된 데이터 수 - MUSIC: {}, BOOK: {}, MOVIE: {}, ACTIVITY: {}", 
+                    deletedMusic, deletedBook, deletedMovie, deletedActivity);
+
+            // 2. 음악 수집
             log.info("음악 수집 시작...");
             musicCrawlingService.collectYouTubeRecommendations();
 
-            // 2. 교보문고 도서 수집
+            // 3. 교보문고 도서 수집
             log.info("교보문고 도서 수집 시작...");
             bookCrawlingService.crawlKyoboBooks();
 
-            // 3. 넷플릭스/왓챠 영화 수집
+            // 4. 넷플릭스/왓챠 영화 수집
             log.info("넷플릭스/왓챠 영화 수집 시작...");
             movieCrawlingService.crawlNetflixWatchaMovies();
 
-            // 4. 모바일 네이버 블로그 활동 수집
+            // 5. 모바일 네이버 블로그 활동 수집
             log.info("모바일 네이버 블로그 활동 수집 시작...");
             activityCrawlingService.crawlNaverBlogs();
 
             log.info("=== 자동 추천 데이터 수집 완료 ===");
         } catch (Exception e) {
             log.error("자동 추천 데이터 수집 중 오류 발생: {}", e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * 수동으로 모든 추천 데이터를 삭제하고 새로 수집합니다.
+     * 깨진 데이터가 있을 때 사용하세요.
+     */
+    public void manualCollectAllRecommendations() {
+        log.info("=== 수동 추천 데이터 수집 시작 ===");
+        
+        try {
+            // 1. 기존 데이터 삭제
+            log.info("기존 추천 데이터 삭제 시작...");
+            int deletedMusic = recommendationRepository.deleteByCategory("MUSIC");
+            int deletedBook = recommendationRepository.deleteByCategory("BOOK");
+            int deletedMovie = recommendationRepository.deleteByCategory("MOVIE");
+            int deletedActivity = recommendationRepository.deleteByCategory("ACTIVITY");
+            log.info("삭제된 데이터 수 - MUSIC: {}, BOOK: {}, MOVIE: {}, ACTIVITY: {}", 
+                    deletedMusic, deletedBook, deletedMovie, deletedActivity);
+
+            // 2. 음악 수집
+            log.info("음악 수집 시작...");
+            musicCrawlingService.collectYouTubeRecommendations();
+
+            // 3. 교보문고 도서 수집
+            log.info("교보문고 도서 수집 시작...");
+            bookCrawlingService.crawlKyoboBooks();
+
+            // 4. 넷플릭스/왓챠 영화 수집
+            log.info("넷플릭스/왓챠 영화 수집 시작...");
+            movieCrawlingService.crawlNetflixWatchaMovies();
+
+            // 5. 모바일 네이버 블로그 활동 수집
+            log.info("모바일 네이버 블로그 활동 수집 시작...");
+            activityCrawlingService.crawlNaverBlogs();
+
+            log.info("=== 수동 추천 데이터 수집 완료 ===");
+        } catch (Exception e) {
+            log.error("수동 추천 데이터 수집 중 오류 발생: {}", e.getMessage(), e);
         }
     }
 }

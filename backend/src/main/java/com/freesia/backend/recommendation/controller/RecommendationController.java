@@ -264,6 +264,43 @@ public class RecommendationController {
     }
 
     /**
+     * 수동으로 모든 추천 데이터를 삭제하고 새로 수집합니다.
+     * 깨진 데이터가 있을 때 사용하세요.
+     * 예: POST http://localhost:8080/api/recommendations/refresh
+     */
+    @PostMapping("/refresh")
+    public ResponseEntity<Map<String, String>> refreshRecommendations() {
+        log.info("=== 수동 추천 데이터 재수집 요청 ===");
+        try {
+            // 기존 데이터 삭제
+            int deletedMusic = recommendationRepository.deleteByCategory("MUSIC");
+            int deletedBook = recommendationRepository.deleteByCategory("BOOK");
+            int deletedMovie = recommendationRepository.deleteByCategory("MOVIE");
+            int deletedActivity = recommendationRepository.deleteByCategory("ACTIVITY");
+            log.info("삭제된 데이터 수 - MUSIC: {}, BOOK: {}, MOVIE: {}, ACTIVITY: {}", 
+                    deletedMusic, deletedBook, deletedMovie, deletedActivity);
+
+            // 새 데이터 수집
+            musicCrawlingService.collectYouTubeRecommendations();
+            bookCrawlingService.crawlKyoboBooks();
+            movieCrawlingService.crawlNetflixWatchaMovies();
+            activityCrawlingService.crawlNaverBlogs();
+
+            Map<String, String> response = new HashMap<>();
+            response.put("status", "success");
+            response.put("message", "추천 데이터가 성공적으로 재수집되었습니다. (삭제: " + 
+                    (deletedMusic + deletedBook + deletedMovie + deletedActivity) + "개)");
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("추천 데이터 재수집 실패: {}", e.getMessage(), e);
+            Map<String, String> response = new HashMap<>();
+            response.put("status", "error");
+            response.put("message", "추천 데이터 재수집 중 오류가 발생했습니다: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
+
+    /**
      * 피드백 요청 DTO
      */
     public static class FeedbackRequest {
