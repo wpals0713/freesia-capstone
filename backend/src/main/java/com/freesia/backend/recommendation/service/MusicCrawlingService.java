@@ -30,69 +30,20 @@ public class MusicCrawlingService {
     @Value("${youtube.api.max-results:100}")
     private int maxResults;
 
-    // 감정별 YouTube 검색어 매핑 - K-POP, POP, J-POP 장르가 명확히 드러나는 트렌디 키워드
+    // 감정별 YouTube 검색어 매핑 - 포인트 절약을 위해 감정당 핵심 키워드 딱 2 개씩만!
     private static final Map<String, List<String>> EMOTION_SEARCH_QUERIES = new HashMap<>();
 
     static {
-        // 기쁨: 신나고 청량한 K-POP/POP/J-POP
-        EMOTION_SEARCH_QUERIES.put("기쁨", List.of(
-                "신나는 KPOP", "청량한 KPOP 아이돌", "Upbeat Pop", "신나는 JPOP",
-                "Happy KPOP 2024", "Bright Pop Songs", "KPOP 댄스곡", "JPOP 업템포",
-                "Fun Pop Music", "KPOP 아이돌 신나는 곡"));
-
-        // 슬픔: 감성적인 K-POP 발라드/POP 발라드
-        EMOTION_SEARCH_QUERIES.put("슬픔", List.of(
-                "감성적인 KPOP 발라드", "Sad Pop", "이별 JPOP",
-                "KPOP 슬픈 발라드", "Emotional Pop Ballad", "JPOP 감성 발라드",
-                "KPOP 눈물 발라드", "Sad Korean Pop", "JPOP 이별송", "KPOP 발라드 모음"));
-
-        // 분노: 강렬한 K-POP 댄스/록 팝
-        EMOTION_SEARCH_QUERIES.put("분노", List.of(
-                "강렬한 KPOP 댄스", "Rock Pop", "비트 빠른 JPOP",
-                "KPOP 강렬한 댄스곡", "Aggressive Pop", "JPOP 빠른 비트",
-                "KPOP 힙합 팝", "Powerful KPOP", "JPOP 록 팝", "KPOP 퍼포먼스 곡"));
-
-        // 불안: 차분한 K-POP/POP 어쿠스틱
-        EMOTION_SEARCH_QUERIES.put("불안", List.of(
-                "차분한 KPOP 어쿠스틱", "Calm Pop", "잔잔한 JPOP",
-                "KPOP 잔잔한 곡", "Relaxing Pop Music", "JPOP 차분한 발라드",
-                "KPOP 어쿠스틱 커버", "Peaceful Pop", "JPOP 잔잔한 곡", "KPOP 트로트 발라드"));
-
-        // 무기력: 에너지 충전 K-POP/POP 업템포
-        EMOTION_SEARCH_QUERIES.put("무기력", List.of(
-                "에너지 충전 KPOP", "Energetic Pop", "Upbeat JPOP",
-                "KPOP 댄스 팝", "Motivational Pop", "JPOP 신나는 곡",
-                "KPOP 활동곡", "High Energy Pop", "JPOP 댄스곡", "KPOP 템포 빠른 곡"));
-
-        // 행복: 밝고 경쾌한 K-POP/POP
-        EMOTION_SEARCH_QUERIES.put("행복", List.of(
-                "밝은 KPOP 곡", "Cheerful Pop", "경쾌한 JPOP",
-                "KPOP 해피송", "Happy Vibes Pop", "JPOP 밝은 곡",
-                "KPOP 경쾌한 댄스곡", "Positive Pop", "JPOP 해피 팝", "KPOP 기분 좋은 곡"));
-
-        // 설렘: 로맨틱한 K-POP 발라드/POP 발라드
-        EMOTION_SEARCH_QUERIES.put("설렘", List.of(
-                "로맨틱한 KPOP", "Romantic Pop", "설렘 JPOP",
-                "KPOP 커플곡", "Love Pop Songs", "JPOP 로맨틱 발라드",
-                "KPOP 사랑송", "Sweet Pop", "JPOP 연애송", "KPOP 감성 러브송"));
-
-        // 외로움: 쓸쓸한 K-POP 발라드/인디 팝
-        EMOTION_SEARCH_QUERIES.put("외로움", List.of(
-                "쓸쓸한 KPOP 발라드", "Lonely Pop", "외로운 JPOP",
-                "KPOP 쓸쓸한 곡", "Melancholy Pop", "JPOP 외로움 발라드",
-                "KPOP 감성 곡", "Sad Korean Ballad", "JPOP 쓸쓸한 노래", "KPOP 인디 팝"));
-
-        // 안정: 편안한 K-POP/POP 어쿠스틱
-        EMOTION_SEARCH_QUERIES.put("안정", List.of(
-                "편안한 KPOP 어쿠스틱", "Peaceful Pop", "차분한 JPOP",
-                "KPOP 힐링곡", "Calm Down Pop", "JPOP 편안한 곡",
-                "KPOP 잔잔한 어쿠스틱", "Soothing Pop", "JPOP 힐링 발라드", "KPOP 라운지 팝"));
-
-        // 희망: 긍정적인 K-POP/POP 업템포
-        EMOTION_SEARCH_QUERIES.put("희망", List.of(
-                "힘이 되는 KPOP", "Hopeful Pop", "Positive JPOP",
-                "KPOP 동기부여 곡", "Inspiring Pop", "JPOP 희망찬 곡",
-                "KPOP 응원가", "Uplifting Pop", "JPOP 긍정적인 곡", "KPOP 에너지 곡"));
+        EMOTION_SEARCH_QUERIES.put("기쁨", List.of("신나는 KPOP 아이돌", "Upbeat Pop MV"));
+        EMOTION_SEARCH_QUERIES.put("슬픔", List.of("KPOP 이별 발라드 MV", "Sad Pop Official MV"));
+        EMOTION_SEARCH_QUERIES.put("분노", List.of("강렬한 KPOP 퍼포먼스", "Rock Pop MV"));
+        EMOTION_SEARCH_QUERIES.put("불안", List.of("차분한 KPOP 어쿠스틱", "Relaxing Pop Music"));
+        EMOTION_SEARCH_QUERIES.put("무기력", List.of("에너지 충전 KPOP 댄스", "Motivational Pop MV"));
+        EMOTION_SEARCH_QUERIES.put("행복", List.of("밝고 경쾌한 KPOP", "Happy Vibes Pop"));
+        EMOTION_SEARCH_QUERIES.put("설렘", List.of("로맨틱 KPOP 러브송", "Sweet Pop MV"));
+        EMOTION_SEARCH_QUERIES.put("외로움", List.of("쓸쓸한 KPOP 인디", "Lonely Pop Official"));
+        EMOTION_SEARCH_QUERIES.put("안정", List.of("편안한 KPOP 힐링", "Soothing Pop MV"));
+        EMOTION_SEARCH_QUERIES.put("희망", List.of("희망찬 KPOP 응원가", "Inspiring Pop Official"));
     }
 
     /**
@@ -145,24 +96,16 @@ public class MusicCrawlingService {
         log.info("저장된 데이터 수: {}, 중복 스킵된 데이터 수: {}", savedCount, skippedCount);
     }
 
-    // 브이로그, 룩북 등 관련 없는 콘텐츠 필터링을 위한 마이너스 키워드
-    // 종교 음악 (CCM, 찬양, 예배 등) 을 강력하게 배제하기 위한 키워드 추가
-    private static final String NEGATIVE_KEYWORDS = " -\"브이로그\" -\"룩북\" -\"vlog\" -\"lookbook\" -\"playlist\" -\"teaser\" -\"티저\" -\"cover\" -\"커버\" -\"모음\" -\"1 시간\" -\"1 hour\" -\"loop\" -\"반복\" -\"CCM\" -\"찬양\" -\"예배\" -\"교회\" -\"worship\" -\"hymn\" -\"종교\" -\"찬송\" -\"가스펠\" -\"은혜\"";
+    // [수정 1] 브이로그, 플레이리스트 등 핵심 쓰레기 데이터만 걸러내기 (너무 길면 API 가 뻗습니다)
+    private static final String NEGATIVE_KEYWORDS = " -playlist -1 시간 -1hour -cover -vlog -교차편집";
 
-    // 공식 뮤직비디오만 검색하기 위한 접미사
-    private static final String OFFICIAL_MV_SUFFIX = " Official MV";
+    // [수정 2] 빈 문자열로 변경! (검색어 자체에 MV 나 Official 을 넣는 것이 훨씬 검색이 잘 됩니다)
+    private static final String OFFICIAL_MV_SUFFIX = "";
 
-    // 필터링할 키워드들 (공식 MV 가 아닌 영상 제외)
+    // 필터링할 키워드들 (자바 코드 단에서 한 번 더 걸러주는 용도)
     private static final List<String> FILTER_KEYWORDS = List.of(
-            "1 시간", "1 시간반", "1 hour", "1-hour", "1hour",
-            "loop", "looping", "반복", "무한반복",
-            "playlist", "플레이리스트", "모음", "모음집",
-            "cover", "커버", "acoustic cover", "piano cover",
-            "vlog", "브이로그", "룩북", "lookbook",
-            "reaction", "리액션", "listening", "감상",
-            "lyrics", "가사", "lyric video", "lyric",
-            "live", "라이브", "concert", "콘서트",
-            "performance", "퍼포먼스", "stage", "무대");
+            "1 시간", "1 hour", "loop", "반복", "playlist", "플레이리스트", "모음",
+            "cover", "커버", "vlog", "브이로그", "reaction", "리액션", "lyrics", "가사", "교차편집");
 
     /**
      * YouTube Search API 를 호출하여 비디오 목록을 가져옵니다.

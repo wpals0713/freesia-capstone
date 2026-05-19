@@ -80,17 +80,35 @@ export const getDiaryDetail = async (diaryId: number): Promise<DiaryDetailRespon
   return data.data;
 };
 
+// ── 오늘 일기 감정 조회 API ───────────────────────────────────────────────────
+
+export interface TodayDiaryResponse {
+  hasDiary: boolean;
+  emotion: string | null;
+  date: string;
+}
+
+export const getTodayDiaryEmotion = async (): Promise<TodayDiaryResponse> => {
+  const { data } = await api.get('/diaries/today');
+  return data.data;
+};
+
 // ── 채팅 API ──────────────────────────────────────────────────────────────────
 
 export interface ChatRequest {
   message: string;
+  emotion?: string; // 선택적 - 오늘 일기 감정
 }
 
 export interface ChatResponse {
   reply: string;
 }
 
-export const chat = async (message: string): Promise<ChatResponse> => {
-  const { data } = await api.post('/chat', { message });
+export const chat = async (message: string, emotion?: string): Promise<ChatResponse> => {
+  const requestBody: { message: string; emotion?: string } = { message };
+  if (emotion) {
+    requestBody.emotion = emotion;
+  }
+  const { data } = await api.post('/chat', requestBody);
   return data.data;
 };

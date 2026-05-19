@@ -698,6 +698,42 @@ input:checked + .slider:before {
     animation-delay: 0.4s;
 }
 
+/* 오늘 나의 기분 배지 스타일 */
+.today-mood-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: linear-gradient(135deg, #fff8e1 0%, #ffe0b2 100%);
+    border: 2px solid rgba(255, 193, 121, 0.5);
+    border-radius: 20px;
+    box-shadow: 0 4px 12px rgba(255, 181, 120, 0.25);
+    animation: moodBadgePulse 2s ease-in-out infinite;
+}
+
+.today-mood-emoji {
+    font-size: 20px;
+    line-height: 1;
+}
+
+.today-mood-text {
+    font-size: 14px;
+    font-weight: 600;
+    color: #a24a0c;
+    white-space: nowrap;
+}
+
+@keyframes moodBadgePulse {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 4px 12px rgba(255, 181, 120, 0.25);
+    }
+    50% {
+        transform: scale(1.05);
+        box-shadow: 0 6px 16px rgba(255, 181, 120, 0.35);
+    }
+}
+
 @keyframes bounce {
     0%, 60%, 100% {
         transform: translateY(0);

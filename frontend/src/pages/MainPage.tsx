@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { chat } from '../api/diary';
+import { chat, getTodayDiaryEmotion } from '../api/diary';
 import { sendFeedback } from '../api/recommendation';
 import FeedbackModal from '../components/FeedbackModal';
 import './MainPage.css';
@@ -129,6 +129,16 @@ const EMPATHY_EMOJI: Record<string, string> = {
     '불안': '😨'
 };
 
+// 채팅 상단 감정 이모지 매핑 (오늘의 기분 표시용)
+const CHAT_EMOTION_EMOJI: Record<string, string> = {
+    '기쁨': '🥰',
+    '즐거움': '😄',
+    '슬픔': '😭',
+    '분노': '😡',
+    '중립': '😐',
+    '불안': '😰'
+};
+
 // 카테고리별 스타일 설정
 const getCategoryConfig = (category: string) => {
     const config: Record<string, { icon: string; backgroundColor: string; borderColor: string }> = {
@@ -242,6 +252,9 @@ function MainPage() {
     ]);
     const [userInput, setUserInput] = useState('');
     const [typing, setTyping] = useState(false);
+    
+    // 오늘 일기 감정 상태 (채팅 프롬프트 연동용)
+    const [todayEmotion, setTodayEmotion] = useState<string | null>(null);
     
     // 현재 화면
     const [currentView, setCurrentView] = useState<'chat' | 'calendar' | 'graph' | 'myInfo'>('chat');
@@ -468,6 +481,35 @@ function MainPage() {
             setIsLoading(false);
         }
     };
+    
+    // 오늘 일기 감정 초기 로딩 - 컴포넌트 마운트 시 실행
+    useEffect(() => {
+        const loadTodayEmotion = async () => {
+            try {
+                const token = localStorage.getItem('accessToken');
+                if (!token) {
+                    console.log('❌ 토큰 없음 - 오늘 감정 로딩 스킵');
+                    return;
+                }
+                
+                console.log('📅 오늘 일기 감정 조회 시작...');
+                const todayResponse = await getTodayDiaryEmotion();
+                
+                if (todayResponse.hasDiary && todayResponse.emotion) {
+                    console.log('✅ 오늘 일기 감정 조회 성공:', todayResponse.emotion);
+                    setTodayEmotion(todayResponse.emotion);
+                } else {
+                    console.log('ℹ️ 오늘 작성한 일기가 없습니다.');
+                    setTodayEmotion(null);
+                }
+            } catch (error) {
+                console.error('❌ 오늘 일기 감정 조회 실패:', error);
+                setTodayEmotion(null);
+            }
+        };
+        
+        loadTodayEmotion();
+    }, []); // 컴포넌트 마운트 시 한 번만 실행
     
     // React 생명주기: 컴포넌트 마운트 시 데이터 로드 (의존성 배열 최적화)
     useEffect(() => {
@@ -768,7 +810,7 @@ function MainPage() {
         }
     };
     
-    // 봇 응답 생성 (백엔드 API 호출)
+    // 봇 응답 생성 (백엔드 API 호출) - 오늘 일기 감정 기반 프롬프트 사용
     const generateBotResponse = async (userMessage: string): Promise<string> => {
         try {
             const token = localStorage.getItem('accessToken');
@@ -776,7 +818,19 @@ function MainPage() {
                 return "죄송해요, 로그인이 필요한 서비스예요. 😢";
             }
             
-            const response = await chat(userMessage);
+            // 오늘 일기 감정 조회
+            let emotion: string | null = null;
+            try {
+                const todayResponse = await getTodayDiaryEmotion();
+                if (todayResponse.hasDiary && todayResponse.emotion) {
+                    emotion = todayResponse.emotion;
+                    console.log("📅 오늘 일기 감정:", emotion);
+                }
+            } catch (error) {
+                console.warn("오늘 일기 감정 조회 실패:", error);
+            }
+            
+            const response = await chat(userMessage, emotion || undefined);
             return response.reply;
         } catch (error) {
             console.error('채팅 API 호출 실패:', error);
@@ -1337,6 +1391,18 @@ function MainPage() {
                             <div className="settings-icon" title="설정" onClick={handleSettingsClick}>
                                 <span className="settings-icon-inner">⚙️</span>
                             </div>
+                            
+                            {/* 오늘 나의 기분 표시 UI */}
+                            {todayEmotion && (
+                                <div className="today-mood-badge">
+                                    <span className="today-mood-emoji">
+                                        {CHAT_EMOTION_EMOJI[todayEmotion] || '💙'}
+                                    </span>
+                                    <span className="today-mood-text">
+                                        오늘의 기분: {todayEmotion}
+                                    </span>
+                                </div>
+                            )}
                             
                             <div className="header-content">
                                 <div className="brand-title">
