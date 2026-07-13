@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 
 @Getter
 @NoArgsConstructor
@@ -16,7 +16,7 @@ public class DiaryCalendarResponse {
     // 🌟 핵심 2: 에러 로그에서 뱉은 타입(LocalDateTime)과 똑같이 맞춰줍니다.
     // 🌟 핵심 3: 프론트엔드가 '2026-04-04' 형태로 쉽게 비교할 수 있도록 변환(Format)해서 보내줍니다!
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd", timezone = "Asia/Seoul")
-    private LocalDateTime createdAt;
+    private LocalDate date;
 
     private String emotion;
 }

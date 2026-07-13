@@ -51,13 +51,20 @@ public class CrawlingScheduler {
 
     /**
      * 매주 월요일 새벽 5 시에 음악 크롤링 실행 (할당량 문제)
+     * DB 초기화 후 새로운 데이터 수집
      */
     @Scheduled(cron = "0 0 5 * * MON")
     public void weeklyMusicCrawling() {
         log.info("=== 매주 월요일 새벽 5 시 음악 크롤링 시작 ===");
+        log.info("MusicCrawlingService 빈 주입 여부: {}", musicCrawlingService != null ? "정상" : "실패");
 
         try {
-            // 음악 크롤링
+            // 1. DB 초기화 (MUSIC 카테고리 데이터 삭제)
+            log.info("DB 초기화 시작...");
+            musicCrawlingService.initializeMusicData();
+            log.info("DB 초기화 완료");
+
+            // 2. 음악 크롤링
             log.info("음악 크롤링 시작...");
             musicCrawlingService.collectYouTubeRecommendations();
             log.info("음악 크롤링 완료");

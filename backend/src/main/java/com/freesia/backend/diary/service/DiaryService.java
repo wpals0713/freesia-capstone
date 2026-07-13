@@ -4,6 +4,7 @@ import com.freesia.backend.diary.dto.DiaryCalendarResponse;
 import com.freesia.backend.diary.dto.DiaryRequestDTO;
 import com.freesia.backend.diary.dto.DiaryResponseDTO;
 import com.freesia.backend.diary.dto.DiaryStatisticsResponseDTO;
+import com.freesia.backend.diary.dto.TodayDiaryResponse;
 import com.freesia.backend.diary.entity.Diary;
 import com.freesia.backend.diary.entity.DiaryStatus;
 import com.freesia.backend.diary.repository.DiaryRepository;
@@ -124,6 +125,25 @@ public class DiaryService {
         public List<DiaryCalendarResponse> getCalendarDiaries(Long memberId, int year, int month) {
                 return diaryRepository.findCalendarDiariesByMemberIdAndYearMonth(
                                 memberId, DiaryStatus.ACTIVE, year, month);
+        }
+
+        // ── 오늘 일기 감정 조회 ────────────────────────────────────────────────────
+
+        public TodayDiaryResponse getTodayDiaryEmotion(Long memberId) {
+                java.time.LocalDate today = java.time.LocalDate.now();
+
+                return diaryRepository
+                                .findByMemberIdAndDateAndStatus(memberId, today, DiaryStatus.ACTIVE)
+                                .map(diary -> TodayDiaryResponse.builder()
+                                                .hasDiary(true)
+                                                .emotion(diary.getEmotion())
+                                                .date(diary.getDate().toString())
+                                                .build())
+                                .orElse(TodayDiaryResponse.builder()
+                                                .hasDiary(false)
+                                                .emotion(null)
+                                                .date(today.toString())
+                                                .build());
         }
 
         // ── 내부 헬퍼 ─────────────────────────────────────────────────────────────

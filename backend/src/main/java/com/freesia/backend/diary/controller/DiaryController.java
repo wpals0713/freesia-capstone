@@ -4,6 +4,7 @@ import com.freesia.backend.diary.dto.DiaryCalendarResponse;
 import com.freesia.backend.diary.dto.DiaryRequestDTO;
 import com.freesia.backend.diary.dto.DiaryResponseDTO;
 import com.freesia.backend.diary.dto.DiaryStatisticsResponseDTO;
+import com.freesia.backend.diary.dto.TodayDiaryResponse;
 import com.freesia.backend.diary.service.DiaryService;
 import com.freesia.backend.global.ApiResponse;
 import com.freesia.backend.global.security.CustomUserDetails;
@@ -109,6 +110,18 @@ public class DiaryController {
             @RequestParam int month) {
         List<DiaryCalendarResponse> response = diaryService.getCalendarDiaries(
                 userDetails.getMemberId(), year, month);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    /**
+     * GET /api/diaries/today
+     * 오늘 작성한 일기의 감정 조회
+     */
+    @GetMapping("/today")
+    public ResponseEntity<ApiResponse<TodayDiaryResponse>> getTodayDiaryEmotion(
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        TodayDiaryResponse response = diaryService.getTodayDiaryEmotion(
+                userDetails.getMemberId());
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 }

@@ -27,97 +27,128 @@ public class MusicCrawlingService {
     @Value("${youtube.api.base-url}")
     private String youtubeBaseUrl;
 
-    @Value("${youtube.api.max-results:100}")
+    @Value("${youtube.api.max-results:30}")
     private int maxResults;
 
-    // 감정별 YouTube 검색어 매핑 - 20 개씩 100 개 검색어
+    // 중복 실행 방지 플래그
+    private boolean isCrawling = false;
+
+    // 감정별 YouTube 검색어 매핑 - 5 가지 감정, 유튜브에서 가장 조회수가 높고 대중적인 키워드 3 개씩!
     private static final Map<String, List<String>> EMOTION_SEARCH_QUERIES = new HashMap<>();
 
     static {
-        EMOTION_SEARCH_QUERIES.put("기쁨", List.of(
-                "기분 좋아지는 노래 플레이리스트", "기분 좋아지는 노래 공식 음원", "신나는 노래 플레이리스트",
-                "행복한 노래 모음", "기분 전환 좋은 노래", "웃음 나는 노래 모음", "댄스 파티 음악",
-                "업템포 노래 모음", "기분 좋은 아침 음악", "즐거운 여행 음악", "취향저격 노래",
-                "힙한 노래 모음", "팝송 플레이리스트", "K-pop 히트곡", "트렌디한 노래",
-                "댄스곡 모음", "파티 음악", "춤추고 싶은 노래", "신나는 팝송", "기분 좋은 팝"));
-        EMOTION_SEARCH_QUERIES.put("슬픔", List.of(
-                "울고 싶은 노래 플레이리스트", "감성 발라드 모음", "슬픈 노래 공식 음원",
-                "마음이 차분해지는 음악", "한숨 나오는 노래 모음", "잔잔한 피아노 음악", "우울할 때 듣는 노래",
-                "마음 위로 되는 노래", "감성적인 노래 모음", "눈물 나는 노래 플레이리스트", "슬픈 발라드",
-                "가사 좋은 노래", "마음이 찡한 노래", "한곡만 듣고 싶은 노래", "감성 음악",
-                "아픈 노래 모음", "이별 노래", "추억 노래", "노래방 슬픈 곡", "마음 위로 곡"));
-        EMOTION_SEARCH_QUERIES.put("분노", List.of(
-                "분노 해소 음악 플레이리스트", "록 음악 모음", "메탈 음악 공식 음원",
-                "스트레스 풀리는 노래", "고음질 록 음악", "에너지 넘치는 노래", "힘나는 노래 모음",
-                "격렬한 음악 플레이리스트", "노래방 추천 곡", "힘내는 노래 모음", "록 발라드",
-                "메탈 곡 모음", "히트곡 모음", "강렬한 노래", "에너지 충전 음악",
-                "노래방 록곡", "힘내는 발라드", "격렬한 팝송", "록 앤롤", "하드록 곡"));
-        EMOTION_SEARCH_QUERIES.put("불안", List.of(
-                "불안할 때 듣는 음악", "차분한 음악 플레이리스트", "명상 음악 공식 음원",
-                "마음 안정되는 노래", "집중력 향상 음악", "스스로 진정되는 노래", "평온한 음악 모음",
-                "힐링 음악 플레이리스트", "잔잔한 자연 소리", "마음 챙김 음악", "클래식 음악",
-                "피아노 곡 모음", "재즈 플레이리스트", "아코디언 음악", "어쿠스틱 곡",
-                "잔잔한 팝송", "차분한 발라드", "명상용 음악", "요가 음악", "수면 음악"));
-        EMOTION_SEARCH_QUERIES.put("무기력", List.of(
-                "기분 전환에 좋은 가벼운 음악", "부드러운 재즈 플레이리스트", "Lo-fi 음악 모음",
-                "취미 생활 추천 음악", "작은 성취감 주는 노래", "일상 속 작은 행복", "가벼운 팝 음악",
-                "여유로운 오후 음악", "집중력 도움 음악", "작은 목표 달성 음악", "인디 음악",
-                "포크 곡 모음", "어쿠스틱 팝", "가벼운 발라드", "일상 음악",
-                "작은 행복 노래", "평온한 곡", "일상 속 음악", "취미 음악", "집중 음악"));
+        EMOTION_SEARCH_QUERIES.put("기쁨", List.of("신나는 아이돌 노래", "2024 인기 가요", "기분 좋아지는 팝송"));
+        EMOTION_SEARCH_QUERIES.put("슬픔", List.of("슬픈 발라드 명곡", "눈물나는 감성 노래", "이별 노래방"));
+        EMOTION_SEARCH_QUERIES.put("분노", List.of("비트 강한 힙합", "파워풀한 락 음악", "스트레스 풀리는 노래"));
+        EMOTION_SEARCH_QUERIES.put("불안", List.of("차분한 카페 인디", "편안한 어쿠스틱", "Lofi Beats"));
+        EMOTION_SEARCH_QUERIES.put("무기력", List.of("에너지 충전 댄스곡", "동기부여 명곡", "파이팅 넘치는 노래"));
+    }
+
+    /**
+     * DB 의 MUSIC 카테고리 데이터를 초기화합니다.
+     * 새로 크롤링하기 전에 기존 데이터를 삭제합니다.
+     */
+    public void initializeMusicData() {
+        log.info("=== MUSIC 카테고리 데이터 초기화 시작 ===");
+        int deletedCount = recommendationRepository.deleteByCategory("MUSIC");
+        log.info("MUSIC 카테고리 데이터 {}개 삭제 완료", deletedCount);
+        log.info("=== MUSIC 카테고리 데이터 초기화 완료 ===");
     }
 
     /**
      * YouTube API 를 통해 추천 데이터를 수집하고 DB 에 저장합니다.
-     * 기존 데이터를 삭제하지 않고, 중복 체크만 해서 새 데이터만 추가합니다.
+     * 중복 실행을 방지합니다.
      */
     public void collectYouTubeRecommendations() {
-        log.info("=== YouTube 추천 데이터 수집 시작 ===");
-
-        int savedCount = 0;
-        int skippedCount = 0;
-
-        for (Map.Entry<String, List<String>> entry : EMOTION_SEARCH_QUERIES.entrySet()) {
-            String emotion = entry.getKey();
-            List<String> searchQueries = entry.getValue();
-
-            log.info("감정: {} - 검색어 {} 개 조회", emotion, searchQueries.size());
-
-            for (String query : searchQueries) {
-                try {
-                    List<YouTubeVideo> videos = searchYouTubeVideos(query, emotion);
-                    log.info("감정 {} 검색어 '{}'로 {}개의 비디오를 찾았습니다.", emotion, query, videos.size());
-
-                    if (videos.isEmpty()) {
-                        log.info("검색 결과가 없습니다. 기존 데이터를 유지합니다.");
-                        continue;
-                    }
-
-                    savedCount += saveVideosToDatabase(videos, emotion);
-                    skippedCount += videos.size();
-                } catch (Exception e) {
-                    log.error("YouTube 검색 실패 (감정: {}, 검색어: {}): {}", emotion, query, e.getMessage());
-                }
-            }
+        // 중복 실행 방지
+        if (isCrawling) {
+            log.warn("이미 크롤링 중입니다. 새로운 요청을 무시합니다.");
+            return;
         }
 
-        log.info("=== YouTube 추천 데이터 수집 완료 ===");
-        log.info("저장된 데이터 수: {}, 중복 스킵된 데이터 수: {}", savedCount, skippedCount);
+        isCrawling = true;
+        log.info("=== YouTube 추천 데이터 수집 시작 ===");
+        log.info("YouTube API 키 설정 여부: {}", youtubeApiKey != null && !youtubeApiKey.isEmpty() ? "설정됨" : "미설정");
+        log.info("YouTube API Base URL: {}", youtubeBaseUrl);
+        log.info("최대 결과 수: {}", maxResults);
+        log.info("총 감정 종류 수: {}", EMOTION_SEARCH_QUERIES.size());
+
+        int totalQueries = EMOTION_SEARCH_QUERIES.values().stream().mapToInt(List::size).sum();
+        log.info("총 검색어 수: {}", totalQueries);
+
+        int savedCount = 0;
+
+        try {
+            for (Map.Entry<String, List<String>> entry : EMOTION_SEARCH_QUERIES.entrySet()) {
+                String emotion = entry.getKey();
+                List<String> searchQueries = entry.getValue();
+
+                log.info("감정: {} - 검색어 {} 개 조회", emotion, searchQueries.size());
+                log.debug("감정 {} 검색어 목록: {}", emotion, searchQueries);
+
+                for (String query : searchQueries) {
+                    try {
+                        List<YouTubeVideo> videos = searchYouTubeVideos(query, emotion);
+
+                        // YouTube API 호출 후 10 초 대기 (429 에러 방지 - 1 분당 10 회 제한 안전 장치)
+                        try {
+                            Thread.sleep(10000);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            log.warn("API 호출 대기 중 인터럽트 발생: {}", e.getMessage());
+                        }
+
+                        log.info("감정 {} 검색어 '{}'로 {}개의 비디오를 찾았습니다.", emotion, query, videos.size());
+
+                        if (videos.isEmpty()) {
+                            log.info("검색 결과가 없습니다. 기존 데이터를 유지합니다.");
+                            continue;
+                        }
+
+                        savedCount += saveVideosToDatabase(videos, emotion);
+                    } catch (Exception e) {
+                        log.error("YouTube 검색 실패 (감정: {}, 검색어: {}): {}", emotion, query, e.getMessage());
+                    }
+                }
+            }
+
+            log.info("=== YouTube 추천 데이터 수집 완료 ===");
+            log.info("저장된 데이터 수: {}", savedCount);
+        } finally {
+            isCrawling = false;
+            log.info("크롤링 플래그를 false 로 변경했습니다.");
+        }
     }
 
     /**
      * YouTube Search API 를 호출하여 비디오 목록을 가져옵니다.
+     * - type=video: 재생목록이나 채널 배제
+     * - videoCategoryId=10: YouTube 카테고리 10 번 = Music
      */
     private List<YouTubeVideo> searchYouTubeVideos(String query, String emotion) {
-        String url = String.format("%s/search?part=snippet&maxResults=%d&q=%s&type=video&key=%s",
+        String url = String.format("%s/search?part=snippet&maxResults=%d&q=%s&type=video&videoCategoryId=10&key=%s",
                 youtubeBaseUrl, maxResults, encodeQuery(query), youtubeApiKey);
 
-        log.debug("YouTube API 호출: {}", url);
+        log.info("YouTube API 호출 시작 (감정: {}, 검색어: {})", emotion, query);
+        log.debug("YouTube API 호출 URL: {}", url);
 
-        YouTubeSearchResponse response = restTemplate.getForObject(url, YouTubeSearchResponse.class);
-
-        if (response == null || response.getItems() == null) {
+        YouTubeSearchResponse response;
+        try {
+            response = restTemplate.getForObject(url, YouTubeSearchResponse.class);
+        } catch (Exception e) {
+            log.error("유튜브 API 호출 에러 상세: ", e);
             return new ArrayList<>();
         }
+
+        // 유튜브 응답 Raw 데이터 확인
+        log.info("유튜브 응답 Raw 데이터: {}", response);
+
+        if (response == null || response.getItems() == null) {
+            log.warn("YouTube API 응답이 null 이거나 items 가 없습니다. 검색어: {}", query);
+            return new ArrayList<>();
+        }
+
+        log.info("YouTube API 응답에서 {}개의 항목을 찾았습니다.", response.getItems().size());
 
         List<YouTubeVideo> videos = new ArrayList<>();
         for (YouTubeSearchResponse.Item item : response.getItems()) {
@@ -131,12 +162,14 @@ public class MusicCrawlingService {
             videos.add(video);
         }
 
+        // 필터링 없이 모든 데이터 반환
         return videos;
     }
 
     /**
      * 파싱한 비디오 데이터를 DB 에 저장합니다.
      * 중복 저장을 방지합니다 (content_url 기준).
+     * 이제 어떤 비디오든 중복만 아니면 무조건 저장합니다.
      */
     private int saveVideosToDatabase(List<YouTubeVideo> videos, String emotion) {
         int savedCount = 0;
@@ -151,14 +184,16 @@ public class MusicCrawlingService {
                 continue;
             }
 
-            // 제목 길이 제한 (최대 200 자)
+            // 제목과 설명 정리
             String title = video.getTitle().trim();
+            String description = video.getDescription() != null ? video.getDescription().trim() : "";
+
+            // 제목 길이 제한 (최대 200 자)
             if (title.length() > 200) {
                 title = title.substring(0, 200);
             }
 
-            // 설명: 기본 설명 사용
-            String description = video.getDescription() != null ? video.getDescription().trim() : "YouTube 공식 음원";
+            // 설명 길이 제한 (최대 1000 자)
             if (description.length() > 1000) {
                 description = description.substring(0, 1000);
             }
@@ -180,6 +215,7 @@ public class MusicCrawlingService {
             log.debug("저장 완료: {}", title);
         }
 
+        log.info("MUSIC 데이터 저장 완료: {}개 저장", savedCount);
         return savedCount;
     }
 
