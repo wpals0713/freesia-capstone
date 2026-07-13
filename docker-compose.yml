@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  ai-server:
+    container_name: ai-server
+    build:
+      context: ./ai-server
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DCU_LLM_API_KEY=${DCU_LLM_API_KEY}
+    networks:
+      - app-network
+
+  backend:
+    container_name: backend
+    build:
+      context: ./backend
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      - DB_PASSWORD=${DB_PASSWORD}
+      - YOUTUBE_API_KEY=${YOUTUBE_API_KEY}
+    networks:
+      - app-network
+
+  frontend:
+    container_name: frontend
+    build:
+      context: ./frontend
+    ports:
+      - "3000:80"
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    name: app-network
+    driver: bridge

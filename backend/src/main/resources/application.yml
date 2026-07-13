@@ -2,9 +2,9 @@ spring:
   profiles:
     active: secret
   datasource:
-    url: jdbc:mysql://localhost:3306/freesia?serverTimezone=Asia/Seoul
+    url: jdbc:mysql://host.docker.internal:3306/freesia?serverTimezone=Asia/Seoul
     username: root
-    password:
+    password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
@@ -34,6 +34,6 @@ jackson:
 
 youtube:
   api:
-    key: AIzaSyBxKJGJJqJvJ8KqJvJ8KqJvJ8KqJvJ8KqJ
+    key: ${YOUTUBE_API_KEY}
     base-url: https://www.googleapis.com/youtube/v3
     max-results: 50
