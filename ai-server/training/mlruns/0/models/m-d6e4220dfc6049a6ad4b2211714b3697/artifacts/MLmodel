@@ -1,0 +1,29 @@
+artifact_path: /Users/leejamin/freesia-final/ai-server/training/mlruns/0/models/m-d6e4220dfc6049a6ad4b2211714b3697/artifacts
+flavors:
+  python_function:
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.sklearn
+    model_path: model.pkl
+    predict_fn: predict
+    python_version: 3.13.14
+  sklearn:
+    code: null
+    pickled_model: model.pkl
+    serialization_format: cloudpickle
+    sklearn_version: 1.9.0
+    skops_trusted_types: null
+is_signature_from_type_hint: false
+mlflow_version: 3.14.0
+model_id: m-d6e4220dfc6049a6ad4b2211714b3697
+model_size_bytes: 8247792
+model_uuid: m-d6e4220dfc6049a6ad4b2211714b3697
+prompts: null
+run_id: 5d16ea857b20452db3ad363b3acfa021
+signature:
+  inputs: '[{"type": "string", "name": "user_text", "required": true}]'
+  outputs: '[{"type": "tensor", "tensor-spec": {"dtype": "object", "shape": [-1]}}]'
+  params: null
+type_hint_from_example: false
+utc_time_created: '2026-07-11 18:27:44.880498'

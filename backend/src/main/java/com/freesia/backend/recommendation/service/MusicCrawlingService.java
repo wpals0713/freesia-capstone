@@ -27,30 +27,46 @@ public class MusicCrawlingService {
     @Value("${youtube.api.base-url}")
     private String youtubeBaseUrl;
 
-    @Value("${youtube.api.max-results:100}")
+    @Value("${youtube.api.max-results:30}")
     private int maxResults;
 
-    // 감정별 YouTube 검색어 매핑 - 포인트 절약을 위해 감정당 핵심 키워드 딱 2 개씩만!
+    // 중복 실행 방지 플래그
+    private boolean isCrawling = false;
+
+    // 감정별 YouTube 검색어 매핑 - 5 가지 감정, 유튜브에서 가장 조회수가 높고 대중적인 키워드 3 개씩!
     private static final Map<String, List<String>> EMOTION_SEARCH_QUERIES = new HashMap<>();
 
     static {
-        EMOTION_SEARCH_QUERIES.put("기쁨", List.of("신나는 KPOP 아이돌", "Upbeat Pop MV"));
-        EMOTION_SEARCH_QUERIES.put("슬픔", List.of("KPOP 이별 발라드 MV", "Sad Pop Official MV"));
-        EMOTION_SEARCH_QUERIES.put("분노", List.of("강렬한 KPOP 퍼포먼스", "Rock Pop MV"));
-        EMOTION_SEARCH_QUERIES.put("불안", List.of("차분한 KPOP 어쿠스틱", "Relaxing Pop Music"));
-        EMOTION_SEARCH_QUERIES.put("무기력", List.of("에너지 충전 KPOP 댄스", "Motivational Pop MV"));
-        EMOTION_SEARCH_QUERIES.put("행복", List.of("밝고 경쾌한 KPOP", "Happy Vibes Pop"));
-        EMOTION_SEARCH_QUERIES.put("설렘", List.of("로맨틱 KPOP 러브송", "Sweet Pop MV"));
-        EMOTION_SEARCH_QUERIES.put("외로움", List.of("쓸쓸한 KPOP 인디", "Lonely Pop Official"));
-        EMOTION_SEARCH_QUERIES.put("안정", List.of("편안한 KPOP 힐링", "Soothing Pop MV"));
-        EMOTION_SEARCH_QUERIES.put("희망", List.of("희망찬 KPOP 응원가", "Inspiring Pop Official"));
+        EMOTION_SEARCH_QUERIES.put("기쁨", List.of("신나는 아이돌 노래", "2024 인기 가요", "기분 좋아지는 팝송"));
+        EMOTION_SEARCH_QUERIES.put("슬픔", List.of("슬픈 발라드 명곡", "눈물나는 감성 노래", "이별 노래방"));
+        EMOTION_SEARCH_QUERIES.put("분노", List.of("비트 강한 힙합", "파워풀한 락 음악", "스트레스 풀리는 노래"));
+        EMOTION_SEARCH_QUERIES.put("불안", List.of("차분한 카페 인디", "편안한 어쿠스틱", "Lofi Beats"));
+        EMOTION_SEARCH_QUERIES.put("무기력", List.of("에너지 충전 댄스곡", "동기부여 명곡", "파이팅 넘치는 노래"));
+    }
+
+    /**
+     * DB 의 MUSIC 카테고리 데이터를 초기화합니다.
+     * 새로 크롤링하기 전에 기존 데이터를 삭제합니다.
+     */
+    public void initializeMusicData() {
+        log.info("=== MUSIC 카테고리 데이터 초기화 시작 ===");
+        int deletedCount = recommendationRepository.deleteByCategory("MUSIC");
+        log.info("MUSIC 카테고리 데이터 {}개 삭제 완료", deletedCount);
+        log.info("=== MUSIC 카테고리 데이터 초기화 완료 ===");
     }
 
     /**
      * YouTube API 를 통해 추천 데이터를 수집하고 DB 에 저장합니다.
-     * 기존 데이터를 삭제하지 않고, 중복 체크만 해서 새 데이터만 추가합니다.
+     * 중복 실행을 방지합니다.
      */
     public void collectYouTubeRecommendations() {
+        // 중복 실행 방지
+        if (isCrawling) {
+            log.warn("이미 크롤링 중입니다. 새로운 요청을 무시합니다.");
+            return;
+        }
+
+        isCrawling = true;
         log.info("=== YouTube 추천 데이터 수집 시작 ===");
         log.info("YouTube API 키 설정 여부: {}", youtubeApiKey != null && !youtubeApiKey.isEmpty() ? "설정됨" : "미설정");
         log.info("YouTube API Base URL: {}", youtubeBaseUrl);
@@ -61,73 +77,78 @@ public class MusicCrawlingService {
         log.info("총 검색어 수: {}", totalQueries);
 
         int savedCount = 0;
-        int skippedCount = 0;
 
-        for (Map.Entry<String, List<String>> entry : EMOTION_SEARCH_QUERIES.entrySet()) {
-            String emotion = entry.getKey();
-            List<String> searchQueries = entry.getValue();
+        try {
+            for (Map.Entry<String, List<String>> entry : EMOTION_SEARCH_QUERIES.entrySet()) {
+                String emotion = entry.getKey();
+                List<String> searchQueries = entry.getValue();
 
-            log.info("감정: {} - 검색어 {} 개 조회", emotion, searchQueries.size());
-            log.debug("감정 {} 검색어 목록: {}", emotion, searchQueries);
+                log.info("감정: {} - 검색어 {} 개 조회", emotion, searchQueries.size());
+                log.debug("감정 {} 검색어 목록: {}", emotion, searchQueries);
 
-            for (String query : searchQueries) {
-                try {
-                    List<YouTubeVideo> videos = searchYouTubeVideos(query, emotion);
-                    log.info("감정 {} 검색어 '{}'로 {}개의 비디오를 찾았습니다.", emotion, query, videos.size());
+                for (String query : searchQueries) {
+                    try {
+                        List<YouTubeVideo> videos = searchYouTubeVideos(query, emotion);
 
-                    if (videos.isEmpty()) {
-                        log.info("검색 결과가 없습니다. 기존 데이터를 유지합니다.");
-                        continue;
+                        // YouTube API 호출 후 10 초 대기 (429 에러 방지 - 1 분당 10 회 제한 안전 장치)
+                        try {
+                            Thread.sleep(10000);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            log.warn("API 호출 대기 중 인터럽트 발생: {}", e.getMessage());
+                        }
+
+                        log.info("감정 {} 검색어 '{}'로 {}개의 비디오를 찾았습니다.", emotion, query, videos.size());
+
+                        if (videos.isEmpty()) {
+                            log.info("검색 결과가 없습니다. 기존 데이터를 유지합니다.");
+                            continue;
+                        }
+
+                        savedCount += saveVideosToDatabase(videos, emotion);
+                    } catch (Exception e) {
+                        log.error("YouTube 검색 실패 (감정: {}, 검색어: {}): {}", emotion, query, e.getMessage());
                     }
-
-                    // 제목 필터링 적용 (1 시간 반복, cover, playlist 등 제외)
-                    videos = filterVideosByTitle(videos);
-                    log.info("감정 {} 검색어 '{}'로 {}개의 비디오를 찾았습니다. (제목 필터링 후)", emotion, query, videos.size());
-
-                    savedCount += saveVideosToDatabase(videos, emotion);
-                    skippedCount += videos.size();
-                } catch (Exception e) {
-                    log.error("YouTube 검색 실패 (감정: {}, 검색어: {}): {}", emotion, query, e.getMessage());
                 }
             }
+
+            log.info("=== YouTube 추천 데이터 수집 완료 ===");
+            log.info("저장된 데이터 수: {}", savedCount);
+        } finally {
+            isCrawling = false;
+            log.info("크롤링 플래그를 false 로 변경했습니다.");
         }
-
-        log.info("=== YouTube 추천 데이터 수집 완료 ===");
-        log.info("저장된 데이터 수: {}, 중복 스킵된 데이터 수: {}", savedCount, skippedCount);
     }
-
-    // [수정 1] 브이로그, 플레이리스트 등 핵심 쓰레기 데이터만 걸러내기 (너무 길면 API 가 뻗습니다)
-    private static final String NEGATIVE_KEYWORDS = " -playlist -1 시간 -1hour -cover -vlog -교차편집";
-
-    // [수정 2] 빈 문자열로 변경! (검색어 자체에 MV 나 Official 을 넣는 것이 훨씬 검색이 잘 됩니다)
-    private static final String OFFICIAL_MV_SUFFIX = "";
-
-    // 필터링할 키워드들 (자바 코드 단에서 한 번 더 걸러주는 용도)
-    private static final List<String> FILTER_KEYWORDS = List.of(
-            "1 시간", "1 hour", "loop", "반복", "playlist", "플레이리스트", "모음",
-            "cover", "커버", "vlog", "브이로그", "reaction", "리액션", "lyrics", "가사", "교차편집");
 
     /**
      * YouTube Search API 를 호출하여 비디오 목록을 가져옵니다.
      * - type=video: 재생목록이나 채널 배제
      * - videoCategoryId=10: YouTube 카테고리 10 번 = Music
-     * - 검색어에 "Official MV" 접미사 추가하여 공식 뮤직비디오만 검색
-     * - 마이너스 키워드: 브이로그, 룩북 등 관련 없는 콘텐츠 필터링
      */
     private List<YouTubeVideo> searchYouTubeVideos(String query, String emotion) {
-        // 검색어에 "Official MV" 접미사와 마이너스 키워드 추가
-        String optimizedQuery = query + OFFICIAL_MV_SUFFIX + NEGATIVE_KEYWORDS;
-
         String url = String.format("%s/search?part=snippet&maxResults=%d&q=%s&type=video&videoCategoryId=10&key=%s",
-                youtubeBaseUrl, maxResults, encodeQuery(optimizedQuery), youtubeApiKey);
+                youtubeBaseUrl, maxResults, encodeQuery(query), youtubeApiKey);
 
-        log.debug("YouTube API 호출: {}", url);
+        log.info("YouTube API 호출 시작 (감정: {}, 검색어: {})", emotion, query);
+        log.debug("YouTube API 호출 URL: {}", url);
 
-        YouTubeSearchResponse response = restTemplate.getForObject(url, YouTubeSearchResponse.class);
-
-        if (response == null || response.getItems() == null) {
+        YouTubeSearchResponse response;
+        try {
+            response = restTemplate.getForObject(url, YouTubeSearchResponse.class);
+        } catch (Exception e) {
+            log.error("유튜브 API 호출 에러 상세: ", e);
             return new ArrayList<>();
         }
+
+        // 유튜브 응답 Raw 데이터 확인
+        log.info("유튜브 응답 Raw 데이터: {}", response);
+
+        if (response == null || response.getItems() == null) {
+            log.warn("YouTube API 응답이 null 이거나 items 가 없습니다. 검색어: {}", query);
+            return new ArrayList<>();
+        }
+
+        log.info("YouTube API 응답에서 {}개의 항목을 찾았습니다.", response.getItems().size());
 
         List<YouTubeVideo> videos = new ArrayList<>();
         for (YouTubeSearchResponse.Item item : response.getItems()) {
@@ -141,193 +162,14 @@ public class MusicCrawlingService {
             videos.add(video);
         }
 
-        // 영상 길이 필터링: 1 분 미만 영상 제외
-        return filterVideosByDuration(videos);
-    }
-
-    /**
-     * 영상 길이를 필터링합니다.
-     * - YouTube Data API v3 는 검색 시 duration 파라미터를 지원하지 않으므로,
-     * 비디오 상세 정보를 조회하여 길이를 확인합니다.
-     * - 1 분 (60 초) 미만의 짧은 영상은 제외합니다.
-     */
-    private List<YouTubeVideo> filterVideosByDuration(List<YouTubeVideo> videos) {
-        List<YouTubeVideo> filteredVideos = new ArrayList<>();
-        int skippedCount = 0;
-
-        for (YouTubeVideo video : videos) {
-            try {
-                // 비디오 상세 정보를 조회하여 길이 확인
-                YouTubeVideoDetails details = getVideoDetails(video.getVideoId());
-
-                if (details != null && details.getDurationSeconds() >= 60) {
-                    filteredVideos.add(video);
-                } else {
-                    skippedCount++;
-                }
-            } catch (Exception e) {
-                log.debug("비디오 상세 정보 조회 실패 (스킵): {}", video.getVideoId());
-                // 오류 발생 시에도 영상은 포함 (필터링 실패 시에는 포함)
-                filteredVideos.add(video);
-            }
-        }
-
-        log.debug("영상 길이 필터링 완료: {}개 중 {}개 제외", videos.size(), skippedCount);
-        return filteredVideos;
-    }
-
-    /**
-     * 영상 제목을 필터링합니다.
-     * - "1 시간", "loop", "cover", "playlist" 등 공식 MV 가 아닌 영상은 제외합니다.
-     */
-    private List<YouTubeVideo> filterVideosByTitle(List<YouTubeVideo> videos) {
-        List<YouTubeVideo> filteredVideos = new ArrayList<>();
-        int skippedCount = 0;
-
-        for (YouTubeVideo video : videos) {
-            String title = video.getTitle().toLowerCase();
-            boolean shouldSkip = false;
-
-            for (String keyword : FILTER_KEYWORDS) {
-                if (title.contains(keyword.toLowerCase())) {
-                    shouldSkip = true;
-                    log.debug("제목 필터링으로 스킵: {} (키워드: {})", video.getTitle(), keyword);
-                    break;
-                }
-            }
-
-            if (!shouldSkip) {
-                filteredVideos.add(video);
-            } else {
-                skippedCount++;
-            }
-        }
-
-        log.info("제목 필터링 완료: {}개 중 {}개 제외", videos.size(), skippedCount);
-        return filteredVideos;
-    }
-
-    /**
-     * YouTube Video API 를 호출하여 비디오 상세 정보를 가져옵니다.
-     */
-    private YouTubeVideoDetails getVideoDetails(String videoId) {
-        String url = String.format("%s/videos?part=contentDetails&id=%s&key=%s",
-                youtubeBaseUrl, videoId, youtubeApiKey);
-
-        try {
-            YouTubeVideoDetailsResponse response = restTemplate.getForObject(url, YouTubeVideoDetailsResponse.class);
-
-            if (response == null || response.getItems() == null || response.getItems().isEmpty()) {
-                return null;
-            }
-
-            YouTubeVideoDetails details = new YouTubeVideoDetails();
-            String duration = response.getItems().get(0).getContentDetails().getDuration();
-            details.setDurationSeconds(parseDuration(duration));
-            return details;
-        } catch (Exception e) {
-            log.debug("비디오 상세 정보 조회 실패: {}", e.getMessage());
-            return null;
-        }
-    }
-
-    /**
-     * ISO 8601 형식 지속 시간을 초 단위로 변환합니다.
-     * 예: PT1M30S -> 90 초, PT2M -> 120 초
-     */
-    private int parseDuration(String duration) {
-        try {
-            if (duration == null || !duration.startsWith("PT")) {
-                return 0;
-            }
-
-            int seconds = 0;
-            String timePart = duration.substring(2); // "PT" 제거
-
-            // 시간 (H)
-            int hoursIndex = timePart.indexOf('H');
-            if (hoursIndex != -1) {
-                seconds += Integer.parseInt(timePart.substring(0, hoursIndex)) * 3600;
-                timePart = timePart.substring(hoursIndex + 1);
-            }
-
-            // 분 (M)
-            int minutesIndex = timePart.indexOf('M');
-            if (minutesIndex != -1) {
-                seconds += Integer.parseInt(timePart.substring(0, minutesIndex)) * 60;
-                timePart = timePart.substring(minutesIndex + 1);
-            }
-
-            // 초 (S)
-            if (!timePart.isEmpty()) {
-                seconds += Integer.parseInt(timePart.substring(0, timePart.indexOf('S')));
-            }
-
-            return seconds;
-        } catch (Exception e) {
-            return 0;
-        }
-    }
-
-    // ==================== DTO 클래스 ====================
-
-    /**
-     * YouTube Video API 응답 DTO
-     */
-    public static class YouTubeVideoDetailsResponse {
-        private List<Item> items;
-
-        public List<Item> getItems() {
-            return items;
-        }
-
-        public void setItems(List<Item> items) {
-            this.items = items;
-        }
-
-        public static class Item {
-            private ContentDetails contentDetails;
-
-            public ContentDetails getContentDetails() {
-                return contentDetails;
-            }
-
-            public void setContentDetails(ContentDetails contentDetails) {
-                this.contentDetails = contentDetails;
-            }
-        }
-
-        public static class ContentDetails {
-            private String duration;
-
-            public String getDuration() {
-                return duration;
-            }
-
-            public void setDuration(String duration) {
-                this.duration = duration;
-            }
-        }
-    }
-
-    /**
-     * YouTube 비디오 상세 정보 DTO
-     */
-    public static class YouTubeVideoDetails {
-        private int durationSeconds;
-
-        public int getDurationSeconds() {
-            return durationSeconds;
-        }
-
-        public void setDurationSeconds(int durationSeconds) {
-            this.durationSeconds = durationSeconds;
-        }
+        // 필터링 없이 모든 데이터 반환
+        return videos;
     }
 
     /**
      * 파싱한 비디오 데이터를 DB 에 저장합니다.
      * 중복 저장을 방지합니다 (content_url 기준).
+     * 이제 어떤 비디오든 중복만 아니면 무조건 저장합니다.
      */
     private int saveVideosToDatabase(List<YouTubeVideo> videos, String emotion) {
         int savedCount = 0;
@@ -342,14 +184,16 @@ public class MusicCrawlingService {
                 continue;
             }
 
-            // 제목 길이 제한 (최대 200 자)
+            // 제목과 설명 정리
             String title = video.getTitle().trim();
+            String description = video.getDescription() != null ? video.getDescription().trim() : "";
+
+            // 제목 길이 제한 (최대 200 자)
             if (title.length() > 200) {
                 title = title.substring(0, 200);
             }
 
-            // 설명: 기본 설명 사용
-            String description = video.getDescription() != null ? video.getDescription().trim() : "YouTube 공식 음원";
+            // 설명 길이 제한 (최대 1000 자)
             if (description.length() > 1000) {
                 description = description.substring(0, 1000);
             }
@@ -371,6 +215,7 @@ public class MusicCrawlingService {
             log.debug("저장 완료: {}", title);
         }
 
+        log.info("MUSIC 데이터 저장 완료: {}개 저장", savedCount);
         return savedCount;
     }
 

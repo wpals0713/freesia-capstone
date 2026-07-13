@@ -36,35 +36,30 @@ public class YouTubeDataService {
 
     static {
         EMOTION_SEARCH_QUERIES.put("기쁨", List.of(
-                "기분 좋아지는 신나는 노래",
-                "happy kpop playlist",
-                "upbeat pop songs 2024",
-                "dance party music",
-                "cheerful songs to lift your mood"));
+                "신나는 노래 플레이리스트",
+                "기분 좋아지는 노래 모음",
+                "드라이브 신나는 팝송",
+                "텐션 올라가는 아이돌 노래"));
         EMOTION_SEARCH_QUERIES.put("슬픔", List.of(
                 "우울할 때 듣는 잔잔한 노래",
-                "sad ballads to cry to",
-                "healing acoustic music",
-                "감성 발라드 모음",
-                "calm piano music for sadness"));
+                "눈물나는 슬픈 발라드",
+                "새벽 감성 인디 노래",
+                "위로가 되는 노래 플레이리스트"));
         EMOTION_SEARCH_QUERIES.put("분노", List.of(
-                "분노 해소 록 음악",
-                "heavy metal workout music",
-                "rage rock songs",
-                "aggressive music to release anger",
-                "hardcore punk playlist"));
+                "스트레스 풀리는 신나는 노래",
+                "운동할 때 듣는 힙합",
+                "분노 해소 강렬한 락",
+                "비트 강한 노동요"));
         EMOTION_SEARCH_QUERIES.put("불안", List.of(
-                "불안할 때 듣는 차분한 음악",
-                "calming meditation music",
-                "relaxing ambient sounds",
-                "stress relief music",
-                "peaceful nature sounds"));
+                "마음이 편안해지는 수면 음악",
+                "지브리 피아노 오르골",
+                "불안감 해소 힐링 주파수",
+                "카페 잔잔한 재즈 플리"));
         EMOTION_SEARCH_QUERIES.put("무기력", List.of(
-                "기분 전환에 좋은 가벼운 음악",
-                "light jazz for relaxation",
-                "easy listening music",
-                "부드러운 재즈 플레이리스트",
-                "chill lofi beats to study to"));
+                "동기부여 에너제틱 팝송",
+                "아침을 깨우는 상쾌한 노래",
+                "작업 집중할 때 듣는 로파이",
+                "도파민 터지는 신나는 노래"));
     }
 
     /**
@@ -85,8 +80,15 @@ public class YouTubeDataService {
             for (String query : searchQueries) {
                 try {
                     List<YouTubeVideo> videos = searchYouTubeVideos(query, emotion);
-                    savedCount += saveVideosToDatabase(videos, emotion);
-                    skippedCount += videos.size(); // 중복으로 스킵된 경우
+                    int newlySaved = saveVideosToDatabase(videos, emotion); // 이번 검색어에서 순수하게 새로 저장된 개수
+                    savedCount += newlySaved; // 전체 저장 누적
+                    skippedCount += (videos.size() - newlySaved);
+
+                    // YouTube API 1 분당 10 회 호출 제한 방지를 위해 6.5 초 대기
+                    Thread.sleep(6500);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    log.error("스레드가 중단되었습니다 (감정: {}, 검색어: {}): {}", emotion, query, e.getMessage());
                 } catch (Exception e) {
                     log.error("YouTube 검색 실패 (감정: {}, 검색어: {}): {}", emotion, query, e.getMessage());
                 }
