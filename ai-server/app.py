@@ -5,6 +5,7 @@ import asyncio
 import joblib
 import httpx
 import re
+import pandas as pd
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -33,12 +34,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── 1. 자체 머신러닝 모델 & DCU LLM 설정 ──────────────────────────────────
+# ── 1. 자체 머신러닝 모델 & DCU LLM & 데이터셋 설정 ───────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "training", "emotion_model.pkl")
+# Parquet 원본 데이터셋 경로
+DATASET_PATH = os.path.join(BASE_DIR, "data", "processed", "training_data.parquet")
 
 # 전역 변수
 emotion_model = None
+chat_dataset_df = None
 
 _DCU_API_URL  = "https://code.cu.ac.kr/llm/v1/chat/completions"
 _DCU_MODEL    = "Qwen/Qwen3.5-35B-A3B-FP8"
@@ -46,15 +50,28 @@ _DCU_API_KEY  = os.getenv("DCU_LLM_API_KEY", "")
 _TIMEOUT_SEC  = 90.0
 _MAX_RETRIES  = 3
 
-# ── 2. 서버 시작 시 머신러닝 모델 단 1회 로딩 ─────────────────────────────
+# ── 2. 서버 시작 시 머신러닝 모델 & 데이터셋 단 1회 로딩 ──────────────────
 @app.on_event("startup")
 async def startup_event():
-    global emotion_model
+    global emotion_model, chat_dataset_df
+    
+    # 감정 분석 모델 로드
     if os.path.exists(MODEL_PATH):
         emotion_model = joblib.load(MODEL_PATH)
         logger.info(f"[AI서버] ✅ 자체 머신러닝 모델 로드 완료: {MODEL_PATH}")
     else:
         logger.error(f"[AI서버] ❌ 모델을 찾을 수 없습니다: {MODEL_PATH}")
+        
+    # Parquet 데이터셋 로드 (Pandas DataFrame)
+    try:
+        if os.path.exists(DATASET_PATH):
+            # 엔진을 pyarrow로 지정하여 로드
+            chat_dataset_df = pd.read_parquet(DATASET_PATH, engine="pyarrow")
+            logger.info(f"[AI서버] ✅ 채팅 데이터셋 로드 완료: {len(chat_dataset_df)} rows")
+        else:
+            logger.error(f"[AI서버] ❌ 데이터셋을 찾을 수 없습니다: {DATASET_PATH}")
+    except Exception as e:
+        logger.error(f"[AI서버] ❌ Parquet 데이터셋 로드 실패 (pyarrow/fastparquet 패키지 확인 필요): {e}")
     
     if not _DCU_API_KEY:
         logger.warning("[AI서버] ⚠️ DCU_LLM_API_KEY가 설정되지 않았습니다.")
@@ -105,20 +122,102 @@ async def analyze(request: TextRequest):
         "aiComment": ai_comment             # LLM이 생성한 맞춤형 위로
     }
 
-# ── 6. 채팅 엔드포인트 (기존 로직 유지, 비동기로 최적화) ──────────────────
+# ── 6. 데이터셋(AI Hub 감성대화말뭉치) 검색 로직 (Rule-based) ────────────
+
+async def _search_from_dataset(user_message: str) -> str:
+    """
+    메모리에 로드된 Parquet DataFrame에서 사용자의 메시지와 매칭되는 답변을 찾습니다.
+    사용자 입력(user_message)의 키워드를 기반으로 유사한 질문(user_text)을 찾거나, 
+    일치하는 감정 상태(emotion)의 답변(system_reply)을 반환합니다.
+    """
+    global chat_dataset_df, emotion_model
+    if chat_dataset_df is None or chat_dataset_df.empty:
+        return ""
+
+    # 1. 감정 추출 (기존 emotion_model 활용)
+    predicted_emotion = None
+    if emotion_model is not None:
+        try:
+            probabilities = emotion_model.predict_proba([user_message])[0]
+            predicted_class_idx = probabilities.argmax()
+            predicted_emotion = emotion_model.classes_[predicted_class_idx]
+        except Exception:
+            pass
+
+    # 2. DataFrame 검색 최적화
+    # 먼저 감정이 일치하는 데이터로 필터링하여 검색 공간을 줄입니다.
+    df_search = chat_dataset_df
+    if predicted_emotion:
+        df_emotion = chat_dataset_df[chat_dataset_df['emotion'] == predicted_emotion]
+        if not df_emotion.empty:
+            df_search = df_emotion
+
+    # 3. Jaccard 유사도를 통한 엄격한 키워드 매칭 계산
+    # 띄어쓰기 기준으로 토큰화하여 단어 집합(Set) 생성
+    user_words = set(user_message.split())
+    if not user_words:
+        return ""
+        
+    best_score = 0.0
+    best_reply = ""
+    
+    # 유사도 기준점 (Threshold) - 오탐지를 막기 위해 문맥이 확실히 일치할 때만 통과
+    # (예: Jaccard 유사도 0.25 이상이면 상당히 많은 핵심 키워드가 일치함을 의미)
+    SIMILARITY_THRESHOLD = 0.25
+    
+    for text, reply in zip(df_search['user_text'], df_search['system_reply']):
+        if not isinstance(text, str):
+            continue
+            
+        text_words = set(text.split())
+        if not text_words:
+            continue
+            
+        # 교집합과 합집합을 통한 Jaccard 유사도 계산
+        intersection = user_words.intersection(text_words)
+        union = user_words.union(text_words)
+        jaccard_score = len(intersection) / len(union)
+        
+        # 임계값을 넘는 데이터 중 가장 점수가 높은 답변 갱신
+        if jaccard_score > best_score and jaccard_score >= SIMILARITY_THRESHOLD:
+            best_score = jaccard_score
+            best_reply = str(reply)
+            
+            # 확신도가 매우 높은 경우(예: 0.7 이상) 불필요한 연산 방지를 위해 즉시 반환
+            if best_score >= 0.7:
+                break
+                
+    # 4. 기준점(Threshold)을 넘는 확실한 답변이 없으면 빈 문자열 반환
+    # -> 빈 문자열을 반환하면 메인 라우팅 로직에 의해 즉시 LLM으로 넘어가게 됨
+    return best_reply
+
+# ── 7. 채팅 엔드포인트 (하이브리드 구조: Rule-based + LLM Fallback) ──────
 @app.post("/api/chat")
 async def chat(request: TextRequest):
     text = request.text.strip()
     if not text:
         raise HTTPException(status_code=400, detail="텍스트가 비어 있습니다.")
 
-    reply = await _generate_chat_response(text)
+    # [STEP 1] 사전 정제된 데이터셋(규칙 기반)에서 먼저 답변을 검색합니다.
+    dataset_reply = await _search_from_dataset(text)
+    
+    if dataset_reply:
+        logger.info(f"[채팅] 데이터셋 매칭 성공: '{text[:15]}...'")
+        return {
+            "success": True,
+            "reply": dataset_reply
+        }
+
+    # [STEP 2] 데이터셋에 일치하는 답변이 없다면, 기존처럼 LLM에게 생성을 요청합니다 (Fallback).
+    logger.info(f"[채팅] 데이터셋 매칭 실패. LLM을 호출합니다: '{text[:15]}...'")
+    llm_reply = await _generate_chat_response(text)
+    
     return {
         "success": True,
-        "reply": reply
+        "reply": llm_reply
     }
 
-# ── 7. 내부 비동기 LLM 호출 함수들 ─────────────────────────────────────────
+# ── 8. 내부 비동기 LLM 호출 함수들 ─────────────────────────────────────────
 
 async def _generate_comfort_comment(text: str, predicted_emotion: str) -> str:
     """
