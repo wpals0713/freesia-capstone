@@ -6,7 +6,10 @@ import joblib
 import httpx
 import re
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+import uuid
+from datetime import datetime
+import rag_service
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -93,8 +96,19 @@ async def health():
     }
 
 # ── 5. [핵심] 하이브리드 감정 분석 엔드포인트 ──────────────────────────────
+
+# 시계열 RAG 분석을 위한 감정별 고정 가중치 가이드라인
+EMOTION_WEIGHTS = {
+    "기쁨": 0.8,
+    "중립": 0.0,
+    "기타": 0.0,
+    "불안": -0.5,
+    "슬픔": -0.8,
+    "분노": -0.9
+}
+
 @app.post("/api/analyze")
-async def analyze(request: TextRequest):
+async def analyze(request: TextRequest, background_tasks: BackgroundTasks):
     text = request.text.strip()
     if not text:
         raise HTTPException(status_code=400, detail="텍스트가 비어 있습니다.")
@@ -109,16 +123,26 @@ async def analyze(request: TextRequest):
     predicted_emotion = emotion_model.classes_[predicted_class_idx]
     sentiment_score = float(probabilities[predicted_class_idx])
 
-    logger.info(f"[ML예측] 텍스트: {text[:20]}... => 감정: {predicted_emotion} (점수: {sentiment_score:.2f})")
+    # [STEP 1-1] 최종 감정 점수 계산 (가중치 * 확신도), 소수점 둘째 자리 반올림
+    weight = EMOTION_WEIGHTS.get(predicted_emotion, 0.0)
+    emotion_score = round(weight * sentiment_score, 2)
 
-    # [STEP 2] 분류된 감정을 바탕으로 LLM에게 맞춤형 위로 코멘트 요청
-    ai_comment = await _generate_comfort_comment(text, predicted_emotion)
+    logger.info(f"[ML예측] 텍스트: {text[:20]}... => 감정: {predicted_emotion} (확신도: {sentiment_score:.2f}, 점수: {emotion_score})")
+
+    # [STEP 1-2] RAG 벡터 DB 저장을 백그라운드 작업으로 비동기 실행 (속도 최적화)
+    diary_id = str(uuid.uuid4())
+    current_date = datetime.now().strftime("%Y-%m-%d")
+    background_tasks.add_task(rag_service.save_diary_to_vector_db, diary_id, text, current_date, emotion_score)
+
+    # [STEP 2] 분류된 감정을 바탕으로 LLM에게 맞춤형 위로 코멘트 요청 (RAG 적용)
+    ai_comment = await _generate_comfort_comment(text, predicted_emotion, emotion_score)
 
     # [STEP 3] 최종 결과 반환
     return {
         "success": True,
         "emotion": predicted_emotion,       # ML이 분류한 정확한 감정
         "sentimentScore": round(sentiment_score, 4), # ML의 확신도
+        "emotion_score": emotion_score,     # 시계열 RAG 분석용 최종 감정 점수
         "aiComment": ai_comment             # LLM이 생성한 맞춤형 위로
     }
 
@@ -219,18 +243,30 @@ async def chat(request: TextRequest):
 
 # ── 8. 내부 비동기 LLM 호출 함수들 ─────────────────────────────────────────
 
-async def _generate_comfort_comment(text: str, predicted_emotion: str) -> str:
+async def _generate_comfort_comment(text: str, predicted_emotion: str, emotion_score: float) -> str:
     """
-    미리 분석된 감정을 프롬프트에 넣어 LLM이 헛소리를 하지 않고 정확하게 위로하도록 통제합니다.
+    미리 분석된 감정과 RAG 검색 결과를 프롬프트에 넣어 LLM이 헛소리를 하지 않고 정확하게 위로하도록 통제합니다.
     """
     if not _DCU_API_KEY:
         return "지금은 위로를 전해드릴 수 없네요. (API 키 오류)"
 
+    # [RAG 적용] 과거 유사한 일기 검색
+    past_diaries = rag_service.search_similar_diaries(text, top_k=3)
+    
+    context_str = ""
+    if past_diaries:
+        context_str = "\n\n[과거 유사한 일기 기록 (Context)]\n"
+        for i, d in enumerate(past_diaries):
+            context_str += f"{i+1}. 날짜: {d['date']}, 감정 점수: {d['emotion_score']}\n내용: {d['text']}\n"
+    else:
+        context_str = "\n\n[과거 유사한 일기 기록 (Context)]\n과거 기록이 없습니다.\n"
+
     system_prompt = (
-        "너는 다정하고 공감 능력이 뛰어난 심리 상담사야. "
-        f"사용자의 일기를 읽었는데, 현재 사용자의 핵심 감정은 **[{predicted_emotion}]** 상태야. "
-        "이 감정에 완벽하게 공감하고 위로가 되는 1~2줄의 다정한 한국어 코멘트를 작성해줘. "
-        "결과는 반드시 순수한 JSON 형식으로만 반환해. 예시: {\"aiComment\": \"오늘 많이 힘드셨죠...\"}"
+        "너는 사용자의 마음을 깊이 이해하는 다정한 AI 친구 '프리지아'야. "
+        "제공된 과거의 비슷한 경험과 감정 기록을 자연스럽게 언급하면서, 현재의 감정에 공감하고 앞으로 나아갈 수 있도록 따뜻하게 위로해 줘. "
+        f"현재 사용자의 핵심 감정은 **[{predicted_emotion}]** 상태이고, 감정 점수는 {emotion_score}점이야. "
+        f"{context_str}\n"
+        "결과는 반드시 순수한 JSON 형식으로만 반환해. 예시: {\"aiComment\": \"예전에도 비슷한 일로 힘드셨네요. 오늘 하루도 정말 고생 많으셨어요...\"}"
     )
 
     payload = {

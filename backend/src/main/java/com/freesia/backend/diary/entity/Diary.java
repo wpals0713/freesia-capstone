@@ -41,6 +41,9 @@ public class Diary {
     /** 감정 강도 (0.0 ~ 1.0) */
     private Double sentimentScore;
 
+    /** 시계열 RAG 분석용 최종 감정 점수 */
+    private Double emotionScore;
+
     /** AI 위로 코멘트 */
     @Column(columnDefinition = "TEXT")
     private String aiComment;
@@ -62,13 +65,14 @@ public class Diary {
 
     @Builder
     public Diary(Member member, String content, String emoji, LocalDate date,
-            String emotion, Double sentimentScore, String aiComment) {
+            String emotion, Double sentimentScore, Double emotionScore, String aiComment) {
         this.member = member;
         this.content = content;
         this.emoji = emoji;
         this.date = date;
         this.emotion = emotion;
         this.sentimentScore = sentimentScore;
+        this.emotionScore = emotionScore;
         this.aiComment = aiComment;
         this.status = DiaryStatus.ACTIVE;
     }

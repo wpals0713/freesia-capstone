@@ -40,8 +40,8 @@ public class DiaryService {
 
                 // AI 서버로 감정 분석 요청
                 SentimentResult analysis = sentimentService.analyze(request.getContent());
-                log.info("[DiaryService] 감정 분석 완료 — memberId={}, emotion={}, score={}",
-                                memberId, analysis.emotion(), analysis.score());
+                log.info("[DiaryService] 감정 분석 완료 — memberId={}, emotion={}, score={}, emotionScore={}",
+                                memberId, analysis.emotion(), analysis.score(), analysis.emotionScore());
 
                 Diary diary = Diary.builder()
                                 .member(member)
@@ -50,6 +50,7 @@ public class DiaryService {
                                 .date(request.getDate())
                                 .emotion(analysis.emotion())
                                 .sentimentScore(analysis.score())
+                                .emotionScore(analysis.emotionScore())
                                 .aiComment(analysis.aiComment())
                                 .build();
 
