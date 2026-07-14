@@ -57,12 +57,13 @@ public class AiSentimentService implements SentimentService {
             if (response != null && response.isSuccess()
                     && response.getEmotion() != null
                     && response.getSentimentScore() != null) {
-                log.debug("[AI서버] 분석 결과 — emotion={}, score={}, comment={}",
-                        response.getEmotion(), response.getSentimentScore(),
+                log.debug("[AI서버] 분석 결과 — emotion={}, score={}, emotionScore={}, comment={}",
+                        response.getEmotion(), response.getSentimentScore(), response.getEmotionScore(),
                         response.getAiComment() != null ? response.getAiComment().substring(0, Math.min(20, response.getAiComment().length())) : "");
                 return new SentimentResult(
                         response.getEmotion(),
                         response.getSentimentScore(),
+                        response.getEmotionScore(),
                         response.getAiComment()
                 );
             }
@@ -71,7 +72,7 @@ public class AiSentimentService implements SentimentService {
             log.warn("[AI서버] 감정 분석 예외 (기본값 사용): {}", ex.getMessage());
         }
 
-        return new SentimentResult(DEFAULT_EMOTION, DEFAULT_SCORE, null);
+        return new SentimentResult(DEFAULT_EMOTION, DEFAULT_SCORE, DEFAULT_SCORE, null);
     }
 
     // ── AI 서버 응답 DTO ───────────────────────────────────────────────────────
@@ -84,6 +85,8 @@ public class AiSentimentService implements SentimentService {
         private boolean success;
         private String  emotion;
         private Double  sentimentScore;
+        @com.fasterxml.jackson.annotation.JsonProperty("emotion_score")
+        private Double  emotionScore;
         private String  aiComment;
     }
 }

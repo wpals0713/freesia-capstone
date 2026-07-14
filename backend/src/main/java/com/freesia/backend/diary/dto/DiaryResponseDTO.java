@@ -17,6 +17,7 @@ public class DiaryResponseDTO {
     private String emoji;
     private String emotion;
     private Double sentimentScore;
+    private Double emotionScore;
     private String aiComment;
     private LocalDate date;
     private String status;
@@ -31,6 +32,7 @@ public class DiaryResponseDTO {
                 .emoji(diary.getEmoji())
                 .emotion(diary.getEmotion())
                 .sentimentScore(diary.getSentimentScore())
+                .emotionScore(diary.getEmotionScore())
                 .aiComment(diary.getAiComment())
                 .date(diary.getDate())
                 .status(diary.getStatus().name())

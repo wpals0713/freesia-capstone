@@ -10,6 +10,7 @@ transformers==4.47.1        # Hugging Face 모델 (KoBERT, KoELECTRA 등)
 torch==2.5.1                # PyTorch (transformers 의존성)
 sentencepiece==0.2.0        # 한국어 토크나이저
 accelerate>=0.26.0          # pipeline 모델 로딩 최적화
+sentence-transformers==3.0.1 # RAG 임베딩 (KR-SBERT) 로딩용
 
 # ── LangChain / RAG ───────────────────────────────────
 langchain==0.3.14

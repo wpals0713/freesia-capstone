@@ -28,6 +28,6 @@ public class MockSentimentService implements SentimentService {
         }
 
         double score = 0.7 + random.nextDouble() * 0.2; // 0.7 ~ 0.9
-        return new SentimentResult(emotion, Math.round(score * 100.0) / 100.0, null);
+        return new SentimentResult(emotion, Math.round(score * 100.0) / 100.0, 0.0, null);
     }
 }
