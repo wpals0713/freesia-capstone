@@ -49,7 +49,7 @@ public class AiSentimentService implements SentimentService {
                     .bodyToMono(AiAnalyzeResponse.class)
                     .timeout(timeout)
                     .onErrorResume(ex -> {
-                        log.warn("[AI서버] 호출 실패 (기본값 사용): {}", ex.getMessage());
+                        log.error("[AI서버] 감정 분석 호출 실패 (기본값 사용). 원인 상세:", ex);
                         return Mono.empty();
                     })
                     .block();
@@ -69,7 +69,7 @@ public class AiSentimentService implements SentimentService {
             }
 
         } catch (Exception ex) {
-            log.warn("[AI서버] 감정 분석 예외 (기본값 사용): {}", ex.getMessage());
+            log.error("[AI서버] 감정 분석 예외 발생 (기본값 사용). 원인 상세:", ex);
         }
 
         return new SentimentResult(DEFAULT_EMOTION, DEFAULT_SCORE, DEFAULT_SCORE, null);
