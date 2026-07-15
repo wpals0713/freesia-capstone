@@ -1,5 +1,6 @@
 import os
 import logging
+from datetime import datetime, timedelta
 from sentence_transformers import SentenceTransformer
 import chromadb
 
@@ -64,6 +65,16 @@ def save_diary_to_vector_db(diary_id: str, text: str, date: str, emotion_score: 
 
 # ── 4. DB 검색 함수 (RAG) ───────────────────────────────────────────────────
 
+def _extract_date_filter(query_text: str) -> str:
+    now = datetime.now()
+    if "오늘" in query_text:
+        return now.strftime("%Y-%m-%d")
+    if "어제" in query_text or "엊그제" in query_text:
+        return (now - timedelta(days=1)).strftime("%Y-%m-%d")
+    if "그저께" in query_text:
+        return (now - timedelta(days=2)).strftime("%Y-%m-%d")
+    return None
+
 def search_similar_diaries(query_text: str, top_k: int = 3) -> list:
     """
     주어진 텍스트와 유사한 과거 일기를 검색하여 반환합니다.
@@ -76,16 +87,27 @@ def search_similar_diaries(query_text: str, top_k: int = 3) -> list:
         return []
 
     try:
-        # 1. 쿼리 텍스트 임베딩
+        # 1. 날짜 메타데이터 필터 분석
+        target_date = _extract_date_filter(query_text)
+        where_clause = {"date": target_date} if target_date else None
+
+        # 2. 쿼리 텍스트 임베딩
         query_vector = embedding_model.encode(query_text).tolist()
 
-        # 2. ChromaDB 유사도 검색
-        results = diary_collection.query(
-            query_embeddings=[query_vector],
-            n_results=top_k
-        )
+        # 3. ChromaDB 유사도 검색
+        if where_clause:
+            results = diary_collection.query(
+                query_embeddings=[query_vector],
+                n_results=top_k,
+                where=where_clause
+            )
+        else:
+            results = diary_collection.query(
+                query_embeddings=[query_vector],
+                n_results=top_k
+            )
         
-        # 3. 결과 매핑
+        # 4. 결과 매핑
         similar_diaries = []
         if results and results.get("documents") and len(results["documents"]) > 0:
             docs = results["documents"][0]
@@ -97,6 +119,9 @@ def search_similar_diaries(query_text: str, top_k: int = 3) -> list:
                     "date": meta.get("date", "Unknown"),
                     "emotion_score": meta.get("emotion_score", 0.0)
                 })
+                
+        # 5. 최신 날짜 우선순위 정렬 (내림차순 정렬)
+        similar_diaries.sort(key=lambda x: x["date"], reverse=True)
                 
         return similar_diaries
 
