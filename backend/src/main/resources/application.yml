@@ -27,7 +27,7 @@ jwt:
 ai:
   server:
     url: http://ai-server:8000
-    timeout-ms: 30000
+    timeout-ms: 90000
 
 jackson:
   time-zone: Asia/Seoul

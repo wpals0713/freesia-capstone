@@ -73,7 +73,7 @@ public class ChatService {
                     .bodyToMono(ChatResponse.class)
                     .timeout(timeout)
                     .onErrorResume(ex -> {
-                        log.warn("[AI 서버] 채팅 호출 실패 (기본값 사용): {}", ex.getMessage());
+                        log.error("[AI 서버] 채팅 호출 실패 (기본값 사용). 원인 상세:", ex);
                         return Mono.empty();
                     })
                     .block();
@@ -85,7 +85,7 @@ public class ChatService {
             }
 
         } catch (Exception ex) {
-            log.warn("[AI 서버] 채팅 예외 (기본값 사용): {}", ex.getMessage());
+            log.error("[AI 서버] 채팅 예외 발생 (기본값 사용). 원인 상세:", ex);
         }
 
         return DEFAULT_RESPONSE;
