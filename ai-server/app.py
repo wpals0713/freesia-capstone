@@ -232,7 +232,7 @@ async def _generate_comfort_comment(text: str, predicted_emotion: str, emotion_s
     if past_diaries:
         context_str = "\n\n[과거 유사한 일기 기록 (Context)]\n"
         for i, d in enumerate(past_diaries):
-            context_str += f"{i+1}. 날짜: {d['date']}, 감정 점수: {d['emotion_score']}\n내용: {d['text']}\n"
+            context_str += f"- [작성일: {d['date']}] {d['text']}\n"
     else:
         context_str = "\n\n[과거 유사한 일기 기록 (Context)]\n과거 기록이 없습니다.\n"
 
@@ -284,9 +284,21 @@ async def _generate_chat_response(user_message: str) -> str:
     if not _DCU_API_KEY:
         return "죄송해요, 지금 연결이 안 되고 있어요. 😢"
 
+    # [RAG 적용] 채팅 중 과거 일기 검색
+    past_diaries = rag_service.search_similar_diaries(user_message, top_k=3)
+    
+    context_str = ""
+    if past_diaries:
+        logger.info("[RAG] 채팅 컨텍스트 검색 완료")
+        context_str = "\n"
+        for d in past_diaries:
+            context_str += f"[과거 기억: {d['date']} {d['text']}]\n"
+        context_str += "위 과거 기억이 있다면 자연스럽게 참고해서 대답해 줘.\n"
+
     system_prompt = (
         "너는 다정하고 공감 능력이 뛰어난 다이어리 봇 '프리지아'야. "
         "반말로 친근하게 대답해 줘. 사용자의 말에 공감하고 자연스러운 대화체를 써줘.\n"
+        f"{context_str}"
         "[절대 규칙] 사용자의 대화 횟수, 일기 작성 횟수를 알고 있더라도 대화 중에 절대 언급하지 마. '벌써 2번째', '몇 번째'라는 단어는 시스템에서 금지어 처리되었어. 위반 시 감점."
     )
 
