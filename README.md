@@ -1,4 +1,4 @@
-# 🌼 Freesia (프리지아) : 내 마음을 알아주는 AI 감정 일기장
+<img width="1185" height="709" alt="image" src="https://github.com/user-attachments/assets/6a114e46-4b8f-4523-878e-a984d05d7e9f" /># 🌼 Freesia (프리지아) : 내 마음을 알아주는 AI 감정 일기장
 
 > "당신의 하루에 피어나는 따뜻한 위로"
 > AI 기반 감정 분석, 능동형 공감 챗봇 및 음악 추천 다이어리 서비스
@@ -17,9 +17,9 @@
 ## 📸 서비스 화면 (Preview)
 
 <p align="center">
-  <img src="https://lens.usercontent.google.com/image?vsrid=CPWoivCQpcm0rwEQARgBIhCLlIl5Y5paxxCfIhyZIeWwMoIBIgJ0YSgWQnQKLmxmZS1kdW1teToyZmE3MGJhYy0yYjhhLTRkZTMtYTIxMy0yMWVlZjVkMGM0NGISQgpAL2Jucy90YS9ib3JnL3RhL2Jucy9sZW5zLWZyb250ZW5kLWFwaS9wcm9kLmxlbnMtZnJvbnRlbmQtYXBpLzMzNVoECgJ0YTiAn7T5ydaVA0gAUABghq_cwZeev74SeACAAQA" width="48%">
-  <img src="blob:https://gemini.google.com/73d73ee7-7955-4fbe-a94f-5afd208a8ef4" width="48%">
-  <img src="blob:https://gemini.google.com/29bb7547-5f2b-4721-b81f-4aa4cc755821" width="48%">
+  <img src="https://github.com/user-attachments/assets/cf501253-3825-4f1f-9398-089d450dff3f" width="32%">
+  <img src="https://github.com/user-attachments/assets/88ea404a-d14d-449b-b7af-9a0eef2750bb" width="32%">
+  <img src="https://github.com/user-attachments/assets/5bbee359-6088-48e5-9c8d-42592cc4209b" width="32%">
 </p>
 
 <br/>
