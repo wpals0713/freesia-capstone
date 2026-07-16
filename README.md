@@ -1,4 +1,4 @@
-<img width="1185" height="709" alt="image" src="https://github.com/user-attachments/assets/6a114e46-4b8f-4523-878e-a984d05d7e9f" /># 🌼 Freesia (프리지아) : 내 마음을 알아주는 AI 감정 일기장
+# 🌼 Freesia (프리지아) : 내 마음을 알아주는 AI 감정 일기장
 
 > "당신의 하루에 피어나는 따뜻한 위로"
 > AI 기반 감정 분석, 능동형 공감 챗봇 및 음악 추천 다이어리 서비스
