@@ -125,6 +125,10 @@ flowchart LR
     class MySQL,ChromaDB db
 ```
 
+<img width="462" height="971" alt="erd_diagram" src="https://github.com/user-attachments/assets/327eaa81-8b86-4f46-a32c-c7574314c563" />
+<br> * MySQL Workbench를 활용하여 설계한 Freesia 서비스의 데이터베이스 ERD입니다.
+
+
 ## ✨ 핵심 기능 (Key Features)
 
 1. **RAG 기반 능동형 챗봇:** 자유 채팅 중 사용자의 과거 일기를 검색하여 시스템 프롬프트에 주입, 과거를 기억하고 안부를 묻는 인간적인 공감형 대화 구현.
