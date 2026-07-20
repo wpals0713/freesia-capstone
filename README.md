@@ -79,6 +79,52 @@ FREESIA-FINAL/
     └── rag_service.py      # ChromaDB 벡터 검색 모듈
 ```
 
+```mermaid
+flowchart LR
+    %% 영역 분리 (Subgraphs)
+    subgraph ClientZone ["📱 Client Zone (Frontend)"]
+        React(["React SPA (Port: 5173)"])
+    end
+
+    subgraph MainAPIZone ["⚙️ Main API Zone (Backend)"]
+        SpringBoot(["Main API Server<br>Spring Boot (Port: 8080)"])
+        MySQL(["MySQL<br>(RDBMS)"])
+    end
+
+    subgraph AIPipelineZone ["🧠 AI Server & Data Pipeline Zone"]
+        FastAPI(["AI Server<br>FastAPI (Port: 8000)"])
+        ChromaDB(["Vector DB<br>ChromaDB (RAG)"])
+    end
+
+    subgraph ExternalAPIZone ["🌐 External API Zone"]
+        YouTube(["YouTube Data API v3<br>(콘텐츠 추천)"])
+        LLM(["Qwen 3.5 LLM<br>(능동형 위로 멘트)"])
+    end
+
+    %% 데이터 흐름 및 통신 관계 (따옴표 추가로 파싱 에러 완벽 해결!)
+    React -->|"REST API<br>(일기 작성, 달력 조회 등)"| SpringBoot
+    SpringBoot <-->|"Data Read/Write"| MySQL
+
+    SpringBoot -->|"AI 채팅 및 분석 요청<br>(REST API)"| FastAPI
+    SpringBoot <-->|"추천 영상<br>시드 데이터 요청"| YouTube
+
+    FastAPI <-->|"과거 일기 RAG 검색<br>및 벡터 임베딩"| ChromaDB
+    FastAPI <-->|"검색된 문맥(Context) 주입<br>및 멘트 생성"| LLM
+
+    %% 스타일링 (선택 사항 - 다이어그램을 더 예쁘게 꾸며줍니다)
+    classDef client fill:#e1f5fe,stroke:#039be5,stroke-width:2px,color:#000
+    classDef backend fill:#e8f5e9,stroke:#43a047,stroke-width:2px,color:#000
+    classDef ai fill:#fff3e0,stroke:#fb8c00,stroke-width:2px,color:#000
+    classDef external fill:#f3e5f5,stroke:#8e24aa,stroke-width:2px,color:#000
+    classDef db fill:#eceff1,stroke:#546e7a,stroke-width:2px,color:#000
+
+    class React client
+    class SpringBoot backend
+    class FastAPI ai
+    class YouTube,LLM external
+    class MySQL,ChromaDB db
+```
+
 ## ✨ 핵심 기능 (Key Features)
 
 1. **RAG 기반 능동형 챗봇:** 자유 채팅 중 사용자의 과거 일기를 검색하여 시스템 프롬프트에 주입, 과거를 기억하고 안부를 묻는 인간적인 공감형 대화 구현.
